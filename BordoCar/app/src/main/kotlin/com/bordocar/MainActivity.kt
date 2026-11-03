@@ -51,6 +51,7 @@ import androidx.core.content.ContextCompat
 import com.bordocar.ui.DashActions
 import com.bordocar.ui.Dashboard
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private val Bg = Color(0xFF0B1222)
 private val CardC = Color(0xFF16213A)
@@ -62,6 +63,9 @@ private val Ok = Color(0xFF34C759)
 /** The phone screen: a preview of the dashboard, the permissions it needs, your Casa and Trabalho, and the download link. */
 class MainActivity : ComponentActivity() {
     private var refresh = mutableIntStateOf(0)
+    /** Choosing a place: for Casa / Trabalho ([key]) or a new favourite (key null). */
+    private class Pick(val key: String?, val label: String)
+    private var picking by mutableStateOf<Pick?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -109,6 +113,8 @@ class MainActivity : ComponentActivity() {
         val prefs = remember { Prefs(this) }
         var tick by remember { mutableIntStateOf(0) }
         LaunchedEffect(Unit) { while (true) { try { NowPlaying.refresh(this@MainActivity) } catch (e: Exception) { }; tick++; delay(1000) } }
+        val pk = picking
+        if (pk != null) { Picker(pk) { picking = null; refresh.intValue++ }; return }
         Column(Modifier.fillMaxSize().background(Bg).systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(verticalAlignment = Alignment.Bottom) {
                 Text("Bordo Car", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
@@ -122,7 +128,7 @@ class MainActivity : ComponentActivity() {
                     val base = LocalDensity.current
                     val k = constraints.maxWidth / 1500f
                     CompositionLocalProvider(LocalDensity provides Density(k, 1f)) {
-                        Dashboard(applicationContext, object : DashActions { override fun home() {}; override fun work() {}; override fun fuel() {}; override fun search() {} }, 12.dp, 12.dp, 12.dp, 12.dp)
+                        Dashboard(applicationContext, object : DashActions { override fun home() {}; override fun work() {}; override fun fuel() {}; override fun favourites() {}; override fun search() {} }, 12.dp, 12.dp, 12.dp, 12.dp)
                     }
                     @Suppress("UNUSED_VARIABLE") val b = base
                 }
@@ -148,13 +154,14 @@ class MainActivity : ComponentActivity() {
 
             Section("Locais") {
                 for ((key, label) in listOf("casa" to "Casa", "trabalho" to "Trabalho")) {
-                    var v by remember { mutableStateOf(prefs.s(key, "")) }
-                    OutlinedTextField(v, { v = it; prefs.put(key, it.trim()) }, label = { Text(label) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Endereço (rua, número, cidade)") },
-                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = Accent, unfocusedBorderColor = Edge,
-                            focusedLabelColor = Accent, unfocusedLabelColor = Sub, cursorColor = Accent))
+                    val p = Places.slot(this@MainActivity, key)
+                    PlaceRow(label, p?.address ?: "Ainda não definido", if (p == null) "Definir" else "Alterar") { picking = Pick(key, label) }
                 }
-                Text("No carro, Casa e Trabalho abrem a rota no Waze ou no Google Maps.", color = Sub, fontSize = 12.sp)
+                Text("FAVORITOS", color = Sub, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp, modifier = Modifier.padding(top = 6.dp))
+                val favs = Places.favourites(this@MainActivity)
+                if (favs.isEmpty()) Text("Nenhum ainda. No carro, o atalho Favoritos mostra a lista para abrir no Waze ou no Maps.", color = Sub, fontSize = 13.sp)
+                for (f in favs) PlaceRow(f.name, f.address, "Remover") { Places.removeFavourite(this@MainActivity, f); refresh.intValue++ }
+                Button("+ Adicionar favorito") { picking = Pick(null, "Favorito") }
             }
 
             Section("Próxima curva do Waze / Maps") {
@@ -174,6 +181,79 @@ class MainActivity : ComponentActivity() {
             Spacer(Modifier.size(20.dp))
         }
     }
+
+    @Composable
+    private fun PlaceRow(title: String, address: String, action: String, onClick: () -> Unit) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f).padding(end = 10.dp)) {
+                Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Text(address, color = Sub, fontSize = 13.sp)
+            }
+            Button(action, onClick)
+        }
+    }
+
+    /**
+     * Picking a place: type and search (Android's address search, the same places Google Maps knows), or use where you are now;
+     * the results show their full address, and a tap keeps it. A favourite also gets a name of your choice.
+     */
+    @Composable
+    private fun Picker(pk: Pick, done: () -> Unit) {
+        var name by remember { mutableStateOf("") }
+        var q by remember { mutableStateOf("") }
+        var busy by remember { mutableStateOf(false) }
+        var results by remember { mutableStateOf<List<Place>?>(null) }
+        val scope = androidx.compose.runtime.rememberCoroutineScope()
+        fun keep(p: Place) {
+            if (pk.key != null) Places.setSlot(this@MainActivity, pk.key, p.copy(name = pk.label))
+            else Places.addFavourite(this@MainActivity, p.copy(name = name.trim().ifBlank { p.name }))
+            done()
+        }
+        fun search() {
+            if (q.isBlank()) return
+            busy = true
+            scope.launch {
+                val r = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Places.search(this@MainActivity, q.trim(), Drive.pos ?: lastKnown()) }
+                results = r; busy = false
+            }
+        }
+        val fieldColors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = Accent, unfocusedBorderColor = Edge,
+            focusedLabelColor = Accent, unfocusedLabelColor = Sub, cursorColor = Accent)
+        androidx.activity.compose.BackHandler { done() }
+        Column(Modifier.fillMaxSize().background(Bg).systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(if (pk.key != null) "Escolher ${pk.label}" else "Novo favorito", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+                Text("Cancelar", color = Accent, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { done() }.padding(8.dp))
+            }
+            if (pk.key == null) OutlinedTextField(name, { name = it }, label = { Text("Nome (ex.: Academia, Mãe)") }, singleLine = true, modifier = Modifier.fillMaxWidth(), colors = fieldColors)
+            OutlinedTextField(q, { q = it }, label = { Text("Endereço ou nome do lugar") }, modifier = Modifier.fillMaxWidth(), colors = fieldColors, minLines = 2, maxLines = 4,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { search() }))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(if (busy) "Buscando…" else "Buscar") { search() }
+                Button("Usar onde estou agora") {
+                    val here = Drive.pos ?: lastKnown()
+                    if (here != null) scope.launch {
+                        val p = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Places.here(this@MainActivity, here) }
+                        results = listOf(p)
+                    } else android.widget.Toast.makeText(this@MainActivity, "Ainda sem sinal do GPS", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+            val r = results
+            if (r != null && r.isEmpty()) Text("Nada encontrado. Tente com o nome da rua e a cidade (ex.: Rua Dois, 120, Teresina).", color = Sub, fontSize = 14.sp)
+            if (r != null && r.isNotEmpty()) Text("Toque no lugar certo:", color = Sub, fontSize = 13.sp)
+            for (p in r.orEmpty()) Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(CardC).border(1.dp, Edge, RoundedCornerShape(14.dp)).clickable { keep(p) }.padding(14.dp)) {
+                Text(p.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Text(p.address, color = Sub, fontSize = 13.sp)
+            }
+        }
+    }
+
+    @android.annotation.SuppressLint("MissingPermission")
+    private fun lastKnown(): LL? = try {
+        val m = getSystemService(android.location.LocationManager::class.java)
+        (m.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER) ?: m.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER))?.let { LL(it.latitude, it.longitude) }
+    } catch (e: Exception) { null }
 
     @Composable
     private fun Section(title: String, content: @Composable () -> Unit) {

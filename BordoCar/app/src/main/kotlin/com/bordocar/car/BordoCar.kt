@@ -59,7 +59,8 @@ class BordoCarService : CarAppService() {
 
 /** Hands a destination to the navigation app Android Auto uses (Waze or Google Maps): an address, a place name or "lat,lon". */
 fun navigateTo(car: CarContext, q: String) {
-    val uri = if (Regex("^-?\\d+(\\.\\d+)?,\\s*-?\\d+(\\.\\d+)?$").matches(q.trim())) "geo:${q.trim().replace(" ", "")}" else "geo:0,0?q=" + Uri.encode(q.trim())
+    val ll = q.trim().replace(" ", "")
+    val uri = if (Regex("^-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?$").matches(ll)) "geo:$ll?q=$ll" else "geo:0,0?q=" + Uri.encode(q.trim())
     try { car.startCarApp(Intent(CarContext.ACTION_NAVIGATE, Uri.parse(uri))) }
     catch (e: Exception) { try { CarToast.makeText(car, "Não consegui abrir o Waze ou o Google Maps", CarToast.LENGTH_LONG).show() } catch (x: Exception) { } }
 }
@@ -77,6 +78,7 @@ class BordoSession : Session() {
             override fun home() = place(screen, "casa", "Casa")
             override fun work() = place(screen, "trabalho", "Trabalho")
             override fun fuel() = navigateTo(carContext, "posto de combustível")
+            override fun favourites() { screen.screenManager.push(FavouritesScreen(carContext)) }
             override fun search() { screen.screenManager.push(SearchScreen(carContext, null)) }
         })
         try { carContext.getCarService(AppManager::class.java).setSurfaceCallback(surface) } catch (e: Exception) { }
@@ -91,8 +93,8 @@ class BordoSession : Session() {
     }
 
     private fun place(screen: Screen, key: String, label: String) {
-        val addr = Prefs(carContext).s(key, "")
-        if (addr.isBlank()) screen.screenManager.push(SearchScreen(carContext, key to label)) else navigateTo(carContext, addr)
+        val p = com.bordocar.Places.slot(carContext, key)
+        if (p == null) screen.screenManager.push(SearchScreen(carContext, key to label)) else navigateTo(carContext, p.target)
     }
 }
 
@@ -120,9 +122,17 @@ class SearchScreen(carContext: CarContext, private val saveAs: Pair<String, Stri
             override fun onSearchSubmitted(searchText: String) {
                 val q = searchText.trim()
                 if (q.isEmpty()) return
-                if (saveAs != null) Prefs(carContext).put(saveAs.first, q)
                 screenManager.pop()
-                navigateTo(carContext, q)
+                if (saveAs != null) {
+                    // kept with its exact spot when Android's address search finds it
+                    val car = carContext
+                    Thread {
+                        val hit = com.bordocar.Places.search(car, q, Drive.pos).firstOrNull()
+                        val p = com.bordocar.Place(saveAs.second, hit?.address ?: q, hit?.lat, hit?.lon)
+                        com.bordocar.Places.setSlot(car, saveAs.first, p)
+                        android.os.Handler(android.os.Looper.getMainLooper()).post { navigateTo(car, p.target) }
+                    }.apply { isDaemon = true }.start()
+                } else navigateTo(carContext, q)
             }
         }).setHeaderAction(Action.BACK).setSearchHint(hint).setShowKeyboardByDefault(true)
             .setItemList(ItemList.Builder().setNoItemsMessage(if (saveAs != null) "Digite o endereço e confirme: ele fica salvo" else "Digite um lugar ou endereço: abre no Waze ou no Google Maps").build())
@@ -133,15 +143,28 @@ class SearchScreen(carContext: CarContext, private val saveAs: Pair<String, Stri
 /** The car's own settings: Casa and Trabalho (change them here or on the phone). */
 class SettingsScreen(carContext: CarContext) : Screen(carContext) {
     override fun onGetTemplate(): Template {
-        val p = Prefs(carContext)
         val list = ItemList.Builder()
         for ((key, label) in listOf("casa" to "Casa", "trabalho" to "Trabalho")) {
-            val v = p.s(key, "")
+            val v = com.bordocar.Places.slot(carContext, key)?.address.orEmpty()
             list.addItem(Row.Builder().setTitle(label).addText(v.ifBlank { "Toque para definir" }).setBrowsable(true)
                 .setOnClickListener { screenManager.push(SearchScreen(carContext, key to label)) }.build())
         }
         list.addItem(Row.Builder().setTitle("Waze ou Google Maps").addText("O Android Auto abre o app de navegação que você usa por último").build())
         return ListTemplate.Builder().setTitle("Bordo Car").setHeaderAction(Action.BACK).setSingleList(list.build()).build()
+    }
+}
+
+/** Your favourite places (added on the phone): tap one and Waze / Google Maps take you there. */
+class FavouritesScreen(carContext: CarContext) : Screen(carContext) {
+    override fun onGetTemplate(): Template {
+        val list = ItemList.Builder().setNoItemsMessage("Nenhum favorito ainda. Adicione no Bordo Car do celular, em Locais.")
+        for (f in com.bordocar.Places.favourites(carContext).take(12)) {
+            val r = Row.Builder().setTitle(f.name)
+            if (f.address != f.name) r.addText(f.address)
+            r.setOnClickListener { screenManager.pop(); navigateTo(carContext, f.target) }
+            list.addItem(r.build())
+        }
+        return ListTemplate.Builder().setTitle("Favoritos").setHeaderAction(Action.BACK).setSingleList(list.build()).build()
     }
 }
 

@@ -29,6 +29,7 @@ import androidx.compose.material.icons.rounded.LocalGasStation
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Navigation
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.Work
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -95,6 +96,7 @@ interface DashActions {
     fun home()
     fun work()
     fun fuel()
+    fun favourites()
     fun search()
 }
 
@@ -287,6 +289,7 @@ private fun Shortcuts(actions: DashActions, modifier: Modifier) {
             Row(Modifier.fillMaxWidth().weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 Shortcut(Icons.Rounded.Home, Color(0xFF2E6BFF), "Casa", "sc-home", Modifier.weight(1f)) { actions.home() }
                 Shortcut(Icons.Rounded.Work, Color(0xFFF29900), "Trabalho", "sc-work", Modifier.weight(1f)) { actions.work() }
+                Shortcut(Icons.Rounded.Star, Color(0xFFE0A800), "Favoritos", "sc-favs", Modifier.weight(1f)) { actions.favourites() }
                 Shortcut(Icons.Rounded.LocalGasStation, Color(0xFF12A4B4), "Postos", "sc-fuel", Modifier.weight(1f)) { actions.fuel() }
                 Shortcut(Icons.Rounded.Search, Color(0xFF8E5CF0), "Buscar", "sc-search", Modifier.weight(1f)) { actions.search() }
             }
@@ -298,8 +301,8 @@ private fun Shortcuts(actions: DashActions, modifier: Modifier) {
 @Composable
 private fun Shortcut(icon: ImageVector, color: Color, label: String, id: String, modifier: Modifier, action: () -> Unit) {
     Column(modifier.carTap(id, action), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(64.dp).clip(RoundedCornerShape(18.dp)).background(color), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = Color.White, modifier = Modifier.size(34.dp))
+        Box(Modifier.size(58.dp).clip(RoundedCornerShape(17.dp)).background(color), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = Color.White, modifier = Modifier.size(31.dp))
         }
         Text(label, color = Txt, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
     }
