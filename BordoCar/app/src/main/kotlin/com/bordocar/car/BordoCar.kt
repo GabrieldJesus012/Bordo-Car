@@ -167,16 +167,16 @@ class SearchScreen(carContext: CarContext, private val saveAs: Pair<String, Stri
 class SettingsScreen(carContext: CarContext) : Screen(carContext) {
     override fun onGetTemplate(): Template {
         val list = ItemList.Builder()
-        for ((key, label) in listOf("casa" to "Casa", "trabalho" to "Trabalho")) {
-            val v = com.bordocar.Places.slot(carContext, key)?.address.orEmpty()
-            list.addItem(Row.Builder().setTitle(label).addText(v.ifBlank { "Toque para definir" }).setBrowsable(true)
-                .setOnClickListener { screenManager.push(SearchScreen(carContext, key to label)) }.build())
-        }
+        list.addItem(Row.Builder().setTitle("Casa e Trabalho").addText(listOf("casa", "trabalho").count { com.bordocar.Places.slot(carContext, it) != null }.let { if (it == 2) "Definidos" else "Toque para definir" })
+            .setBrowsable(true).setOnClickListener { screenManager.push(PlacesScreen(carContext)) }.build())
+        com.bordocar.ui.Modes.load(carContext)
+        list.addItem(Row.Builder().setTitle("Modo do painel").addText(com.bordocar.ui.Modes.name() + " · toque para trocar")
+            .setOnClickListener { com.bordocar.ui.Modes.next(carContext); invalidate() }.build())
         com.bordocar.ui.Themes.load(carContext)
         list.addItem(Row.Builder().setTitle("Tema do painel").addText(com.bordocar.ui.Themes.cur.name + " · toque para trocar")
             .setOnClickListener { com.bordocar.ui.Themes.next(carContext); invalidate() }.build())
         com.bordocar.ui.Sport.load(carContext)
-        list.addItem(Row.Builder().setTitle("Painel esportivo (acima de ${com.bordocar.ui.Sport.ON_KMH} km/h)")
+        list.addItem(Row.Builder().setTitle("Esportivo acima de ${com.bordocar.ui.Sport.ON_KMH} km/h")
             .addText(if (com.bordocar.ui.Sport.enabled) "Ligado" else "Desligado")
             .setToggle(androidx.car.app.model.Toggle.Builder { on ->
                 com.bordocar.ui.Sport.set(carContext, on); invalidate()
@@ -187,6 +187,19 @@ class SettingsScreen(carContext: CarContext) : Screen(carContext) {
         list.addItem(Row.Builder().setTitle("Navegar com").addText((if (nav == "maps") "Google Maps" else "Waze") + " · toque para trocar")
             .setOnClickListener { Prefs(carContext).put("navapp", if (nav == "maps") "waze" else "maps"); invalidate() }.build())
         return ListTemplate.Builder().setTitle("Bordo Car").setHeaderAction(Action.BACK).setSingleList(list.build()).build()
+    }
+}
+
+/** Casa and Trabalho, set from the car. */
+class PlacesScreen(carContext: CarContext) : Screen(carContext) {
+    override fun onGetTemplate(): Template {
+        val list = ItemList.Builder()
+        for ((key, label) in listOf("casa" to "Casa", "trabalho" to "Trabalho")) {
+            val v = com.bordocar.Places.slot(carContext, key)?.address.orEmpty()
+            list.addItem(Row.Builder().setTitle(label).addText(v.ifBlank { "Toque para definir" }).setBrowsable(true)
+                .setOnClickListener { screenManager.push(SearchScreen(carContext, key to label)) }.build())
+        }
+        return ListTemplate.Builder().setTitle("Casa e Trabalho").setHeaderAction(Action.BACK).setSingleList(list.build()).build()
     }
 }
 

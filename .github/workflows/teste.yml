@@ -69,6 +69,18 @@ jobs:
           tap "Wait"; sleep 1; tap "Aguardar"; sleep 1
           tap "Ver prévia (14 s)"; sleep 4; adb exec-out screencap -p > out/5-esportivo-curva.png
           sleep 6; adb exec-out screencap -p > out/6-esportivo-sem-rota.png
+          sleep 6
+          # the other modes (scrolls down to the button, which scrolls back up to the dashboard)
+          tapS() {
+            for k in 1 2 3 4 5 6 7 8; do
+              adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1; adb pull /sdcard/ui.xml ui.xml > /dev/null 2>&1
+              grep -q "text=\"$1\"" ui.xml && { tap "$1"; return; }
+              adb shell input swipe 500 900 500 300 400; sleep 1
+            done
+          }
+          tapS "Música"; sleep 4; adb exec-out screencap -p > out/7-modo-musica.png
+          tapS "Estrada"; sleep 4; adb exec-out screencap -p > out/8-modo-estrada.png
+          tapS "Normal"; sleep 2
           adb logcat -d > out/logcat.txt
           grep -E "FATAL EXCEPTION|AndroidRuntime" -A8 out/logcat.txt | head -60 > out/erros.txt || true
           cat out/erros.txt

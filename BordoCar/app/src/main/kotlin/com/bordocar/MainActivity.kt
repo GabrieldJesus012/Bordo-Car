@@ -164,13 +164,33 @@ class MainActivity : ComponentActivity() {
                 Text("Casa, Trabalho, Favoritos, Postos e Buscar abrem a rota neste app.", color = Sub, fontSize = 12.sp)
             }
 
+            Section("Modo do painel") {
+                com.bordocar.ui.Modes.load(this@MainActivity)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    for ((k, label) in com.bordocar.ui.Modes.all) {
+                        val on = com.bordocar.ui.Modes.cur == k
+                        Box(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(if (on) Accent else Color(0xFF0F1830)).clickable {
+                                com.bordocar.ui.Modes.set(this@MainActivity, k); scope.launch { scroll.animateScrollTo(0) } }
+                            .padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                            Text(label, color = Color.White, fontSize = 14.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.SemiBold, maxLines = 1)
+                        }
+                    }
+                }
+                Text(when (com.bordocar.ui.Modes.cur) {
+                    "esportivo" -> "Esportivo: luzes, velocidade grande e a próxima curva dentro da bússola."
+                    "musica" -> "Música: o carro na estrada no meio, a velocidade e o disco da música com o tempo."
+                    "estrada" -> "Estrada: chegada e quanto falta, a próxima curva grande, média e há quanto tempo está dirigindo."
+                    else -> "Normal: música, próxima curva ou atalhos, velocidade, bússola e os km."
+                } + " A prévia lá em cima já mostra.", color = Sub, fontSize = 12.sp)
+            }
+
             Section("Painel esportivo") {
                 com.bordocar.ui.Sport.load(this@MainActivity)
                 val on = com.bordocar.ui.Sport.enabled
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.weight(1f)) {
-                        Text("Acima de ${com.bordocar.ui.Sport.ON_KMH} km/h", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Troca para o painel esportivo, com a próxima curva dentro da bússola, e volta ao normal abaixo de ${com.bordocar.ui.Sport.OFF_KMH} km/h.", color = Sub, fontSize = 12.sp)
+                        Text("Trocar para o esportivo acima de ${com.bordocar.ui.Sport.ON_KMH} km/h", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Vale para qualquer modo: volta ao modo escolhido abaixo de ${com.bordocar.ui.Sport.OFF_KMH} km/h.", color = Sub, fontSize = 12.sp)
                     }
                     androidx.compose.material3.Switch(on, { com.bordocar.ui.Sport.set(this@MainActivity, it) })
                 }
