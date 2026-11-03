@@ -175,6 +175,15 @@ class SettingsScreen(carContext: CarContext) : Screen(carContext) {
         com.bordocar.ui.Themes.load(carContext)
         list.addItem(Row.Builder().setTitle("Tema do painel").addText(com.bordocar.ui.Themes.cur.name + " · toque para trocar")
             .setOnClickListener { com.bordocar.ui.Themes.next(carContext); invalidate() }.build())
+        com.bordocar.ui.Sport.load(carContext)
+        list.addItem(Row.Builder().setTitle("Painel esportivo (acima de ${com.bordocar.ui.Sport.ON_KMH} km/h)")
+            .addText(if (com.bordocar.ui.Sport.enabled) "Ligado · ao ligar, mostra uma prévia" else "Desligado · ao ligar, mostra uma prévia")
+            .setToggle(androidx.car.app.model.Toggle.Builder { on ->
+                com.bordocar.ui.Sport.set(carContext, on)
+                if (on) screenManager.popToRoot() else invalidate()     // back to the dashboard, to see the preview
+            }.setChecked(com.bordocar.ui.Sport.enabled).build()).build())
+        list.addItem(Row.Builder().setTitle("Ver prévia do painel esportivo").addText("Mostra por 14 segundos")
+            .setOnClickListener { com.bordocar.ui.Sport.preview(); screenManager.popToRoot() }.build())
         val nav = Prefs(carContext).s("navapp", "waze")
         list.addItem(Row.Builder().setTitle("Navegar com").addText((if (nav == "maps") "Google Maps" else "Waze") + " · toque para trocar")
             .setOnClickListener { Prefs(carContext).put("navapp", if (nav == "maps") "waze" else "maps"); invalidate() }.build())

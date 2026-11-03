@@ -140,13 +140,14 @@ private fun Label(text: String, modifier: Modifier = Modifier) =
  */
 @Composable
 fun Dashboard(ctx: Context, actions: DashActions, padL: Dp, padT: Dp, padR: Dp, padB: Dp) {
-    remember { Themes.load(ctx); 0 }
+    remember { Themes.load(ctx); Sport.load(ctx); 0 }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
             now = System.currentTimeMillis()
             try { NowPlaying.refresh(ctx) } catch (e: Exception) { }
-            delay(1000L)
+            Sport.update(Math.round((Drive.speed * 3.6).coerceAtLeast(0.0)).toInt())
+            delay(if (Sport.previewing(now)) 250L else 1000L)
         }
     }
     // the weather and the town where you are (every 20 minutes)
@@ -185,6 +186,7 @@ fun Dashboard(ctx: Context, actions: DashActions, padL: Dp, padT: Dp, padR: Dp, 
         }
     }
     val navigating = NavNotice.active(now)
+    if (Sport.showing(now)) { SportDash(now, bat, charging, wx, city, padL, padT, padR, padB); return }
 
     Box(Modifier.fillMaxSize().background(Bg)) {
         Column(Modifier.fillMaxSize().padding(start = padL, top = padT, end = padR, bottom = padB), verticalArrangement = Arrangement.spacedBy(10.dp)) {

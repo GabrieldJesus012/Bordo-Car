@@ -180,6 +180,9 @@ object Drive {
     }.timeInMillis
 
     /** Distance (m) and time moving (s) driven today: the trips saved today plus the one being driven now. */
+    /** The trip going on now (metres, seconds moving), or null. */
+    fun current(): Pair<Double, Long>? = if (tripOn) tripDistance to tripMoveSec else null
+
     /** How many trips today (the one going on counts). */
     fun todayTrips(): Int { val d0 = dayStart(); return trips().count { it.start >= d0 } + (if (tripOn && tripT0 >= d0) 1 else 0) }
 

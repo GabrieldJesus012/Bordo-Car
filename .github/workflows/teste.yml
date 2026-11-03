@@ -57,6 +57,14 @@ jobs:
           tap "Viagens"; sleep 3; adb exec-out screencap -p > out/3-viagens.png
           tap "Abastecimento"; sleep 3; adb exec-out screencap -p > out/4-abastecimento.png
           tap "Início"; sleep 2
+          # the sporty dashboard's preview (scrolls down to the button, which scrolls back up to the dashboard)
+          for k in 1 2 3 4 5 6 7 8; do
+            adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1; adb pull /sdcard/ui.xml ui.xml > /dev/null 2>&1
+            grep -q 'Ver prévia' ui.xml && break
+            adb shell input swipe 500 900 500 300 400; sleep 1
+          done
+          tap "Ver prévia (14 s)"; sleep 4; adb exec-out screencap -p > out/5-esportivo-curva.png
+          sleep 6; adb exec-out screencap -p > out/6-esportivo-sem-rota.png
           adb logcat -d > out/logcat.txt
           grep -E "FATAL EXCEPTION|AndroidRuntime" -A8 out/logcat.txt | head -60 > out/erros.txt || true
           cat out/erros.txt
