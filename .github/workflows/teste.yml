@@ -44,6 +44,19 @@ jobs:
           # a short drive at 50 km/h going north (the phone screen reads the GPS itself while it's open)
           for i in $(seq 1 40); do lat=$(python3 -c "print(f'{$lat + 13.9/111320:.7f}')"); fixat 27; sleep 1; done
           adb exec-out screencap -p > out/2-dirigindo.png
+          # the other two tabs (taps the tab by its text)
+          tap() {
+            adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1; adb pull /sdcard/ui.xml ui.xml > /dev/null 2>&1
+            xy=$(python3 -c "
+          import re,sys
+          x=open('ui.xml',encoding='utf-8').read()
+          m=re.search(r'text=\"'+re.escape(sys.argv[1])+r'\"[^>]*bounds=\"\[(\d+),(\d+)\]\[(\d+),(\d+)\]\"',x)
+          print(f'{(int(m[1])+int(m[3]))//2} {(int(m[2])+int(m[4]))//2}' if m else '')" "$1")
+            [ -n "$xy" ] && adb shell input tap $xy
+          }
+          tap "Viagens"; sleep 3; adb exec-out screencap -p > out/3-viagens.png
+          tap "Abastecimento"; sleep 3; adb exec-out screencap -p > out/4-abastecimento.png
+          tap "Início"; sleep 2
           adb logcat -d > out/logcat.txt
           grep -E "FATAL EXCEPTION|AndroidRuntime" -A8 out/logcat.txt | head -60 > out/erros.txt || true
           cat out/erros.txt
