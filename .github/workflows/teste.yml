@@ -38,7 +38,7 @@ jobs:
           fixat() { adb emu geo fix $lon $lat 70 8 $1 > /dev/null; }
           fixat 0
           adb logcat -c
-          adb shell monkey -p $APP -c android.intent.category.LAUNCHER 1
+          sleep 5; adb shell am start -W -n $APP/com.bordocar.MainActivity
           sleep 15
           adb exec-out screencap -p > out/1-tela.png
           # a short drive at 50 km/h going north (the phone screen reads the GPS itself while it's open)
