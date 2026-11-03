@@ -268,7 +268,8 @@ class MainActivity : ComponentActivity() {
             }
         }
         val trips = Drive.trips().take(80)
-        if (trips.isEmpty()) Text("Nenhuma viagem ainda. Elas aparecem aqui quando você dirige com o celular no Android Auto.", color = Sub, fontSize = 14.sp)
+        if (trips.isEmpty()) Text(if (n > 0) "Viagem em andamento: ela aparece aqui quando terminar (2 minutos parado ou ao desligar o carro)."
+            else "Nenhuma viagem ainda. Elas aparecem aqui quando você dirige com o celular no Android Auto.", color = Sub, fontSize = 14.sp)
         val day = java.text.SimpleDateFormat("yyyyMMdd", br)
         val today = day.format(java.util.Date()); val yest = day.format(java.util.Date(System.currentTimeMillis() - 86_400_000L))
         for ((d, list) in trips.groupBy { day.format(java.util.Date(it.start)) }) {
