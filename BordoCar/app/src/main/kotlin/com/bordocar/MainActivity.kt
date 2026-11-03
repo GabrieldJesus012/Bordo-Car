@@ -96,7 +96,7 @@ class MainActivity : ComponentActivity() {
     }
     private fun stopGps() { try { lm?.removeUpdates(gps) } catch (e: Exception) { }; lm = null }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         refresh.intValue++; startGps()
     }
