@@ -1,0 +1,228 @@
+package com.bordocar.car
+
+import android.app.Presentation
+import android.content.Intent
+import android.graphics.Rect
+import android.hardware.display.DisplayManager
+import android.hardware.display.VirtualDisplay
+import android.net.Uri
+import android.widget.FrameLayout
+import androidx.car.app.AppManager
+import androidx.car.app.CarAppService
+import androidx.car.app.CarContext
+import androidx.car.app.CarToast
+import androidx.car.app.Screen
+import androidx.car.app.Session
+import androidx.car.app.SurfaceCallback
+import androidx.car.app.SurfaceContainer
+import androidx.car.app.model.Action
+import androidx.car.app.model.ActionStrip
+import androidx.car.app.model.CarIcon
+import androidx.car.app.model.ItemList
+import androidx.car.app.model.ListTemplate
+import androidx.car.app.model.Row
+import androidx.car.app.model.SearchTemplate
+import androidx.car.app.model.Template
+import androidx.car.app.navigation.model.NavigationTemplate
+import androidx.car.app.validation.HostValidator
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
+import androidx.core.graphics.drawable.IconCompat
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.bordocar.Drive
+import com.bordocar.DriveService
+import com.bordocar.Prefs
+import com.bordocar.R
+import com.bordocar.ui.CarTaps
+import com.bordocar.ui.DashActions
+import com.bordocar.ui.Dashboard
+
+/**
+ * Bordo Car on Android Auto: a dashboard, not a map. Android Auto only lets navigation apps draw their own screen, so it's listed
+ * as one, but it never navigates itself: Casa, Trabalho, Postos and Buscar hand the destination to Waze or Google Maps (whichever
+ * Android Auto uses), and the dashboard shows their next turn while they guide you.
+ */
+class BordoCarService : CarAppService() {
+    // only Google's car hosts (Android Auto) may connect
+    override fun createHostValidator(): HostValidator =
+        HostValidator.Builder(applicationContext).addAllowedHosts(androidx.car.app.R.array.hosts_allowlist_sample).build()
+    override fun onCreateSession(): Session = BordoSession()
+}
+
+/** Hands a destination to the navigation app Android Auto uses (Waze or Google Maps): an address, a place name or "lat,lon". */
+fun navigateTo(car: CarContext, q: String) {
+    val uri = if (Regex("^-?\\d+(\\.\\d+)?,\\s*-?\\d+(\\.\\d+)?$").matches(q.trim())) "geo:${q.trim().replace(" ", "")}" else "geo:0,0?q=" + Uri.encode(q.trim())
+    try { car.startCarApp(Intent(CarContext.ACTION_NAVIGATE, Uri.parse(uri))) }
+    catch (e: Exception) { try { CarToast.makeText(car, "Não consegui abrir o Waze ou o Google Maps", CarToast.LENGTH_LONG).show() } catch (x: Exception) { } }
+}
+
+class BordoSession : Session() {
+    private lateinit var surface: DashSurface
+
+    override fun onCreateScreen(intent: Intent): Screen {
+        val app = carContext.applicationContext
+        Drive.init(app)
+        // the GPS keeps counting while Waze or Maps is on the car screen
+        DriveService.start(app)
+        val screen = DashScreen(carContext)
+        surface = DashSurface(carContext, object : DashActions {
+            override fun home() = place(screen, "casa", "Casa")
+            override fun work() = place(screen, "trabalho", "Trabalho")
+            override fun fuel() = navigateTo(carContext, "posto de combustível")
+            override fun search() { screen.screenManager.push(SearchScreen(carContext, null)) }
+        })
+        try { carContext.getCarService(AppManager::class.java).setSurfaceCallback(surface) } catch (e: Exception) { }
+        lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onDestroy(owner: LifecycleOwner) {
+                // unplugged: the trip being driven is saved and the GPS rests
+                DriveService.stop(app)
+                surface.release()
+            }
+        })
+        return screen
+    }
+
+    private fun place(screen: Screen, key: String, label: String) {
+        val addr = Prefs(carContext).s(key, "")
+        if (addr.isBlank()) screen.screenManager.push(SearchScreen(carContext, key to label)) else navigateTo(carContext, addr)
+    }
+}
+
+/** The car screen itself: only Android Auto's two small buttons (search and settings); the rest is the dashboard drawn on the surface. */
+class DashScreen(carContext: CarContext) : Screen(carContext) {
+    private fun icon(res: Int) = CarIcon.Builder(IconCompat.createWithResource(carContext, res)).build()
+    override fun onGetTemplate(): Template {
+        val strip = ActionStrip.Builder()
+            .addAction(Action.Builder().setIcon(icon(R.drawable.ic_car_search)).setOnClickListener { screenManager.push(SearchScreen(carContext, null)) }.build())
+            .addAction(Action.Builder().setIcon(icon(R.drawable.ic_car_settings)).setOnClickListener { screenManager.push(SettingsScreen(carContext)) }.build())
+            .build()
+        return NavigationTemplate.Builder().setActionStrip(strip).build()
+    }
+}
+
+/**
+ * Search with the car's keyboard or voice: what you type goes to Waze / Google Maps, which find it and start the route.
+ * With [saveAs] set, the address is kept as your Casa or Trabalho (and the route starts).
+ */
+class SearchScreen(carContext: CarContext, private val saveAs: Pair<String, String>?) : Screen(carContext) {
+    override fun onGetTemplate(): Template {
+        val hint = if (saveAs != null) "Endereço de ${saveAs.second}" else "Para onde?"
+        return SearchTemplate.Builder(object : SearchTemplate.SearchCallback {
+            override fun onSearchTextChanged(searchText: String) {}
+            override fun onSearchSubmitted(searchText: String) {
+                val q = searchText.trim()
+                if (q.isEmpty()) return
+                if (saveAs != null) Prefs(carContext).put(saveAs.first, q)
+                screenManager.pop()
+                navigateTo(carContext, q)
+            }
+        }).setHeaderAction(Action.BACK).setSearchHint(hint).setShowKeyboardByDefault(true)
+            .setItemList(ItemList.Builder().setNoItemsMessage(if (saveAs != null) "Digite o endereço e confirme: ele fica salvo" else "Digite um lugar ou endereço: abre no Waze ou no Google Maps").build())
+            .build()
+    }
+}
+
+/** The car's own settings: Casa and Trabalho (change them here or on the phone). */
+class SettingsScreen(carContext: CarContext) : Screen(carContext) {
+    override fun onGetTemplate(): Template {
+        val p = Prefs(carContext)
+        val list = ItemList.Builder()
+        for ((key, label) in listOf("casa" to "Casa", "trabalho" to "Trabalho")) {
+            val v = p.s(key, "")
+            list.addItem(Row.Builder().setTitle(label).addText(v.ifBlank { "Toque para definir" }).setBrowsable(true)
+                .setOnClickListener { screenManager.push(SearchScreen(carContext, key to label)) }.build())
+        }
+        list.addItem(Row.Builder().setTitle("Waze ou Google Maps").addText("O Android Auto abre o app de navegação que você usa por último").build())
+        return ListTemplate.Builder().setTitle("Bordo Car").setHeaderAction(Action.BACK).setSingleList(list.build()).build()
+    }
+}
+
+/**
+ * Puts the dashboard on the car screen: Android Auto hands over a surface; a private virtual display shows on it, and the
+ * dashboard (Compose) runs on that display. Taps come in as positions and go to whatever card is there.
+ */
+class DashSurface(private val carContext: CarContext, private val actions: DashActions) : SurfaceCallback {
+    private var display: VirtualDisplay? = null
+    private var presentation: Presentation? = null
+    private val owner = ComposeOwner()
+    private val area = mutableStateOf<Rect?>(null)
+    private val scale = mutableStateOf(1.5f)
+    private var width = 1; private var height = 1
+    private var dens = 1f
+
+    /** Sized to about 720 units across the screen's short side (the size the design is drawn for), never below the car's own scale. */
+    private fun fit() {
+        val short = minOf(width, height).toFloat()
+        val perUnit = (short / 720f).coerceIn(dens * 0.95f, dens * 2.4f)
+        scale.value = perUnit / dens
+    }
+
+    override fun onSurfaceAvailable(surfaceContainer: SurfaceContainer) {
+        val s = surfaceContainer.surface ?: return
+        width = surfaceContainer.width.coerceAtLeast(1); height = surfaceContainer.height.coerceAtLeast(1)
+        val existing = display
+        if (existing != null) { existing.surface = s; existing.resize(width, height, surfaceContainer.dpi); fit(); return }
+        try {
+            val dm = carContext.getSystemService(DisplayManager::class.java)
+            val vd = dm.createVirtualDisplay("BordoCar", width, height, surfaceContainer.dpi, s, DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY)
+            display = vd
+            val p = Presentation(carContext, vd.display)
+            dens = p.context.resources.displayMetrics.density
+            fit()
+            val root = FrameLayout(p.context)
+            owner.start()
+            root.setViewTreeLifecycleOwner(owner); root.setViewTreeSavedStateRegistryOwner(owner); root.setViewTreeViewModelStoreOwner(owner)
+            val view = ComposeView(p.context)
+            val appCtx = carContext.applicationContext
+            view.setContent {
+                val base = LocalDensity.current
+                val d = Density(base.density * scale.value, 1f)
+                CompositionLocalProvider(LocalDensity provides d) {
+                    // keep inside the part Android Auto leaves free (its bar and buttons)
+                    val a = area.value
+                    fun px(v: Int) = (v.coerceAtLeast(0) / d.density).dp
+                    val l = px(a?.left ?: 0); val t = px(a?.top ?: 0)
+                    val r = px(width - (a?.right ?: width)); val b = px(height - (a?.bottom ?: height))
+                    Dashboard(appCtx, actions, l + 16.dp, t + 14.dp, r + 16.dp, b + 12.dp)
+                }
+            }
+            root.addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+            p.setContentView(root)
+            p.show()
+            presentation = p
+        } catch (e: Exception) { android.util.Log.w("BordoCar", "couldn't put the dashboard on the car screen", e) }
+    }
+
+    override fun onSurfaceDestroyed(surfaceContainer: SurfaceContainer) { display?.surface = null }
+    override fun onVisibleAreaChanged(visibleArea: Rect) { area.value = Rect(visibleArea) }
+    override fun onStableAreaChanged(stableArea: Rect) {}
+    override fun onClick(x: Float, y: Float) { try { CarTaps.hit(x, y) } catch (e: Exception) { } }
+
+    fun release() {
+        try { owner.stop() } catch (e: Exception) { }
+        try { presentation?.dismiss() } catch (e: Exception) { }
+        try { display?.release() } catch (e: Exception) { }
+        presentation = null; display = null
+    }
+}
+
+/** Lifecycle and saved state for Compose on the car screen (there's no activity there). */
+class ComposeOwner : androidx.lifecycle.LifecycleOwner, androidx.savedstate.SavedStateRegistryOwner, androidx.lifecycle.ViewModelStoreOwner {
+    private val reg = androidx.lifecycle.LifecycleRegistry(this)
+    private val saved = androidx.savedstate.SavedStateRegistryController.create(this)
+    private val store = androidx.lifecycle.ViewModelStore()
+    override val lifecycle: androidx.lifecycle.Lifecycle get() = reg
+    override val savedStateRegistry: androidx.savedstate.SavedStateRegistry get() = saved.savedStateRegistry
+    override val viewModelStore: androidx.lifecycle.ViewModelStore get() = store
+    private var on = false
+    fun start() { if (on) return; on = true; saved.performRestore(null); reg.currentState = androidx.lifecycle.Lifecycle.State.RESUMED }
+    fun stop() { if (!on) return; reg.currentState = androidx.lifecycle.Lifecycle.State.DESTROYED; store.clear() }
+}

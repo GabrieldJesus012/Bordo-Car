@@ -1,0 +1,67 @@
+name: Build Bordo Car
+# (no celular: Actions > menu "All workflows" > Build Bordo Car > Run workflow)
+# Builds the app on every push to main, signs it and puts the APK on this repo's "app" release, so this link always gives the
+# newest version:
+#   https://github.com/<you>/<repo>/releases/download/app/BordoCar.apk
+# Signed with the same key as Horizon Nav BR: the key file is taken from that repo at build time (it is not kept here), and its
+# password comes from this repo's secret KEYSTORE_PASSWORD (Settings > Secrets and variables > Actions).
+# Without the secret the app is still built (to check it compiles), but not published.
+on:
+  push:
+    branches: [main]
+    paths: ["BordoCar/**", ".github/workflows/build.yml"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Get the signing key file (from the Horizon Nav BR repo)
+        run: curl -fsSL -o horizon-br.keystore "https://raw.githubusercontent.com/${{ github.repository_owner }}/Horizon-Maps/main/horizon-br.keystore" || echo "::warning::Não achei a chave no repositório Horizon-Maps"
+      - name: Check the signing key
+        id: key
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_PASSWORD" ]; then
+            echo "::warning::Sem o secret KEYSTORE_PASSWORD: o app é compilado, mas não é publicado (Settings > Secrets and variables > Actions > New repository secret)"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          elif [ -f horizon-br.keystore ] && keytool -list -storetype PKCS12 -keystore horizon-br.keystore -storepass "$KEYSTORE_PASSWORD" > /dev/null 2>&1; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::KEYSTORE_PASSWORD não abre a chave: confira o secret"; exit 1
+          fi
+      - uses: actions/setup-java@v5
+        with: { distribution: temurin, java-version: 17 }
+      - name: Accept the Android licences
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: 8.14.4 }
+      - name: Build release APK
+        working-directory: BordoCar
+        env:
+          KEYSTORE_PASSWORD: ${{ steps.key.outputs.ok == 'true' && secrets.KEYSTORE_PASSWORD || '' }}
+        run: |
+          set -o pipefail
+          gradle :app:assembleRelease 2>&1 | tee build.log || {
+            grep -E '^e: |error:|What went wrong' -A2 build.log | head -40 | while IFS= read -r l; do echo "::error::$l"; done
+            exit 1
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BordoCar-apk
+          path: BordoCar/app/build/outputs/bordo/*.apk
+          if-no-files-found: error
+      - name: Publish the app to the download link
+        if: steps.key.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK=BordoCar/app/build/outputs/bordo/BordoCar.apk
+          NOTES="Bordo Car 1.0.${{ github.run_number }}, gerado em $(date -u '+%d/%m/%Y'). Baixe o BordoCar.apk abaixo e instale por cima do anterior."
+          gh release create app --repo "${{ github.repository }}" --title "Bordo Car" --notes "$NOTES" --latest=false 2>/dev/null \
+            || gh release edit app --repo "${{ github.repository }}" --title "Bordo Car (1.0.${{ github.run_number }})" --notes "$NOTES"
+          gh release upload app "$APK" --repo "${{ github.repository }}" --clobber
+          echo "Download link: https://github.com/${{ github.repository }}/releases/download/app/BordoCar.apk"
