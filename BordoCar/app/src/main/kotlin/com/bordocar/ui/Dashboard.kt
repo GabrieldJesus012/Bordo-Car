@@ -289,11 +289,16 @@ private fun TurnCard(modifier: Modifier) {
                     if (ic != null) Image(ic.asImageBitmap(), null, colorFilter = ColorFilter.tint(Color.White), modifier = Modifier.size(isz.dp))
                     else Icon(Icons.Rounded.Navigation, null, tint = Color.White, modifier = Modifier.size(isz.dp))
                     Column(Modifier.padding(start = 16.dp)) {
-                        androidx.compose.runtime.key(NavNotice.title) {
-                            Text(NavNotice.title, color = Color.White, fontSize = big.sp, lineHeight = (big * 1.12f).sp, fontWeight = FontWeight.ExtraBold, maxLines = 1,
-                                modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2000, repeatDelayMillis = 2000, velocity = 40.dp))
+                        // the distance stays put (big); only the street / instruction scrolls when it's long
+                        val (dist, rest) = NavNotice.split(NavNotice.title, NavNotice.text)
+                        if (dist != null) Text(dist, color = Color.White, fontSize = big.sp, lineHeight = (big * 1.12f).sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                        val line = if (dist != null) rest else NavNotice.title
+                        if (line.isNotBlank()) androidx.compose.runtime.key(line) {
+                            Text(line, color = Color.White, fontSize = (if (dist != null) (big * 0.6f).coerceIn(14f, 24f) else big).sp, fontWeight = if (dist != null) FontWeight.SemiBold else FontWeight.ExtraBold,
+                                lineHeight = ((if (dist != null) (big * 0.6f).coerceIn(14f, 24f) else big) * 1.15f).sp, maxLines = 1,
+                                modifier = Modifier.padding(top = 2.dp).basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2000, repeatDelayMillis = 2000, velocity = 40.dp))
                         }
-                        if (NavNotice.text.isNotBlank()) androidx.compose.runtime.key(NavNotice.text) {
+                        if (dist == null && NavNotice.text.isNotBlank()) androidx.compose.runtime.key(NavNotice.text) {
                             Text(NavNotice.text, color = Color.White, fontSize = (big * 0.5f).coerceIn(12f, 20f).sp, maxLines = 1,
                                 modifier = Modifier.padding(top = 2.dp).basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2000, repeatDelayMillis = 2000, velocity = 40.dp))
                         }
@@ -426,9 +431,9 @@ private fun TodayCard(modifier: Modifier) {
       BoxWithConstraints(Modifier.fillMaxSize()) {
         val h = maxHeight.value
         val roomy = h >= 120f                        // room for the line of small numbers underneath
-        val big = (h * (if (roomy) 0.30f else 0.40f)).coerceIn(20f, 60f)
-        val small = (h * 0.10f).coerceIn(13f, 20f)
-        val cap = (h * 0.055f).coerceIn(9f, 12f)
+        val big = (h * (if (roomy) 0.26f else 0.40f)).coerceIn(20f, 56f)
+        val small = (h * 0.15f).coerceIn(17f, 26f)
+        val cap = (h * 0.085f).coerceIn(12f, 16f)
         Column(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Label("KM HOJE")
             Text(buildAnnotatedString {
@@ -438,12 +443,12 @@ private fun TodayCard(modifier: Modifier) {
             if (roomy) {
                 Box(Modifier.padding(top = 4.dp, bottom = 6.dp).fillMaxWidth(0.72f).height(1.dp).background(Edge))
                 val drive = if (mins < 60) "$mins min" else "${mins / 60}h ${"%02d".format(mins % 60)}"
-                val avg = if (secs >= 60) "${Math.round(km / (secs / 3600.0))}" else "–"
+                val avg = if (secs >= 60) "${Math.round(km / (secs / 3600.0))} km/h" else "–"
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    for ((v, l) in listOf(drive to "DIRIGINDO", avg to "KM/H MÉDIA", "$n" to if (n == 1) "VIAGEM" else "VIAGENS"))
+                    for ((v, l) in listOf(drive to "DIRIGINDO", avg to "MÉDIA", "$n" to if (n == 1) "VIAGEM" else "VIAGENS"))
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(v, color = Txt, fontSize = small.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                            Text(l, color = Lbl, fontSize = cap.sp, letterSpacing = 1.sp, maxLines = 1)
+                            Text(l, color = Lbl, fontSize = cap.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                         }
                 }
             } else Text(if (n == 0) "nenhuma viagem hoje" else "$n ${if (n == 1) "viagem" else "viagens"} · ${if (mins < 60) "$mins min" else "${mins / 60}h ${"%02d".format(mins % 60)}"}",

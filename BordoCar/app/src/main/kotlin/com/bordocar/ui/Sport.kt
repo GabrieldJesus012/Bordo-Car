@@ -145,12 +145,13 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
                                 val isz = d.value * 0.26f
                                 if (ic != null) Image(ic.asImageBitmap(), null, colorFilter = ColorFilter.tint(Color.White), modifier = Modifier.size(isz.dp))
                                 else Icon(Icons.Rounded.TurnRight, null, tint = Color.White, modifier = Modifier.size(isz.dp))
-                                androidx.compose.runtime.key(turnTitle) {
-                                    Text(turnTitle, color = Color.White, fontSize = (d.value * 0.115f).coerceIn(18f, 54f).sp, fontWeight = FontWeight.ExtraBold, fontStyle = FontStyle.Italic,
-                                        maxLines = 1, modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2000, repeatDelayMillis = 2000, velocity = 40.dp))
-                                }
-                                if (turnText.isNotBlank()) androidx.compose.runtime.key(turnText) {
-                                    Text(turnText, color = Color(0xFFFFD0C8), fontSize = (d.value * 0.045f).coerceIn(12f, 18f).sp, maxLines = 1,
+                                // the distance stays put; only the rest scrolls when it's long
+                                val (dist, rest) = NavNotice.split(turnTitle, turnText)
+                                val bigT = (d.value * 0.115f).coerceIn(18f, 54f)
+                                Text(dist ?: rest, color = Color.White, fontSize = bigT.sp, fontWeight = FontWeight.ExtraBold, fontStyle = FontStyle.Italic, maxLines = 1,
+                                    modifier = if (dist != null) Modifier else Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2000, repeatDelayMillis = 2000, velocity = 40.dp))
+                                if (dist != null && rest.isNotBlank()) androidx.compose.runtime.key(rest) {
+                                    Text(rest, color = Color(0xFFFFD0C8), fontSize = (d.value * 0.055f).coerceIn(13f, 22f).sp, maxLines = 1,
                                         modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2000, repeatDelayMillis = 2000, velocity = 40.dp))
                                 }
                             } else {

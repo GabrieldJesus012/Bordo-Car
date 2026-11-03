@@ -30,7 +30,19 @@ class DriveService : Service(), LocationListener {
         running = true
         startForegroundNotice()
         startGps()
+        watch.removeCallbacks(check); watch.postDelayed(check, 10_000L)
         return START_STICKY
+    }
+
+    // if the GPS goes quiet (the phone cut it off), the speed isn't left showing an old number, and the GPS is asked again
+    private val watch = android.os.Handler(Looper.getMainLooper())
+    private val check = object : Runnable {
+        override fun run() {
+            val quiet = System.currentTimeMillis() - Drive.lastFixAt
+            if (quiet > 6_000L && Drive.speed != 0.0) Drive.speed = 0.0
+            if (quiet > 20_000L) { try { lm?.removeUpdates(this@DriveService) } catch (e: Exception) { }; lm = null; startGps() }
+            watch.postDelayed(this, 10_000L)
+        }
     }
 
     private fun startForegroundNotice() {
@@ -50,8 +62,9 @@ class DriveService : Service(), LocationListener {
         try {
             val m = getSystemService(Context.LOCATION_SERVICE) as LocationManager
             m.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0f, this, Looper.getMainLooper())
+            gpsNote = "pedido ${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date())}"
             lm = m
-        } catch (e: Exception) { }
+        } catch (e: Exception) { gpsNote = "recusado: ${e.javaClass.simpleName}" }
     }
 
     override fun onLocationChanged(l: Location) {
@@ -67,6 +80,7 @@ class DriveService : Service(), LocationListener {
     override fun onStatusChanged(provider: String?, status: Int, extras: android.os.Bundle?) {}
 
     override fun onDestroy() {
+        watch.removeCallbacks(check)
         try { lm?.removeUpdates(this) } catch (e: Exception) { }
         lm = null
         running = false
@@ -80,6 +94,8 @@ class DriveService : Service(), LocationListener {
         private const val CH = "drive"
         /** True while the car is connected (the phone's own screen then leaves the GPS to this service). */
         @Volatile var running = false
+        /** How the last GPS request went (shown on the phone). */
+        @Volatile var gpsNote = ""
         fun start(ctx: Context) {
             try {
                 val i = Intent(ctx, DriveService::class.java)

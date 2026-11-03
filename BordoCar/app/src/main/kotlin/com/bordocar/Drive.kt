@@ -21,6 +21,8 @@ class Trip(val start: Long, val end: Long, val dist: Double, val moving: Long, v
  */
 object Drive {
     var speed by mutableStateOf(0.0)            // m/s
+    /** When the last GPS fix came (to notice when the GPS stops). */
+    @Volatile var lastFixAt = 0L
     var heading by mutableStateOf<Double?>(null)   // degrees, null until you've moved
     var pos by mutableStateOf<LL?>(null)
     /** Bumped whenever the distance changes, so the cards re-read the totals. */
@@ -50,6 +52,7 @@ object Drive {
     fun onLocation(ctx: Context, l: Location) {
         init(ctx)
         val p = LL(l.latitude, l.longitude)
+        lastFixAt = System.currentTimeMillis()
         val sp = if (l.hasSpeed()) l.speed.toDouble() else 0.0
         speed = sp
         // which way you're going: the GPS's own bearing when moving, otherwise from the last few metres travelled

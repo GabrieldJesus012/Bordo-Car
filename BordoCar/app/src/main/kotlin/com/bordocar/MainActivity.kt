@@ -204,6 +204,12 @@ class MainActivity : ComponentActivity() {
                     if (Build.VERSION.SDK_INT >= 33) ps += Manifest.permission.POST_NOTIFICATIONS
                     requestPermissions(ps.toTypedArray(), 1)
                 }
+                if (loc && Build.VERSION.SDK_INT >= 29) {
+                    val bg = has(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                    Item("Localização o tempo todo", "Para a velocidade e os km continuarem com o app do celular fechado (escolha \"Permitir o tempo todo\")", bg, "Permitir") {
+                        requestPermissions(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION), 3)
+                    }
+                }
                 if (!notif) Item("Notificações", "O aviso discreto enquanto conta os km no carro", false, "Permitir") {
                     if (Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 2)
                 }
@@ -233,6 +239,10 @@ class MainActivity : ComponentActivity() {
                 val nn = com.bordocar.car.navNote
                 if (nn.isNotBlank()) Text("Último destino enviado: $nn", color = Sub, fontSize = 12.sp)
                 if (Weather.lastNote.isNotBlank()) Text("Clima: ${Weather.lastNote}", color = Sub, fontSize = 12.sp)
+                if (DriveService.running || Drive.lastFixAt > 0L) {
+                    val ago = if (Drive.lastFixAt > 0L) "${(System.currentTimeMillis() - Drive.lastFixAt) / 1000} s" else "nenhum ainda"
+                    Text("GPS do carro: último sinal há $ago" + (if (DriveService.gpsNote.isNotBlank()) " (${DriveService.gpsNote})" else ""), color = Sub, fontSize = 12.sp)
+                }
                 Text(if (raw.isBlank()) "Ainda nada lido. Comece uma rota no Waze ou no Google Maps e volte aqui para ver o que eles mostram." else "Última lida: $raw",
                     color = Sub, fontSize = 13.sp)
             }

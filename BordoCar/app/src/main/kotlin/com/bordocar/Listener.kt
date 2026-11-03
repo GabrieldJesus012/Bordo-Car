@@ -80,6 +80,17 @@ object NavNotice {
         if (removedAt > 0L && now - removedAt > 8_000L) return false
         return title.isNotBlank() && now - at < 30 * 60_000L
     }
+    /** The distance to the turn ("350 m", "1,2 km"), to show standing still, and the rest of the instruction (which may scroll). */
+    fun split(title: String, text: String): Pair<String?, String> {
+        val re = Regex("(\\d+(?:[.,]\\d+)?)\\s*(km|m)\\b", RegexOption.IGNORE_CASE)
+        for ((src, other) in listOf(title to text, text to title)) {
+            val m = re.find(src) ?: continue
+            val dist = m.value.replace(Regex("\\s+"), " ")
+            val rest = src.removeRange(m.range).replace(Regex("^[\\s·•,:\\-–]+|[\\s·•,:\\-–]+$"), "").replace(Regex("\\b(em|in)\\s*$"), "").trim()
+            return dist to listOf(rest, other).filter { it.isNotBlank() }.joinToString(" · ")
+        }
+        return null to listOf(title, text).filter { it.isNotBlank() }.joinToString(" · ")
+    }
     fun clear() { pkg = ""; key = ""; removedAt = 0L; app = ""; title = ""; text = ""; sub = ""; icon = null; at = 0L }
 }
 
