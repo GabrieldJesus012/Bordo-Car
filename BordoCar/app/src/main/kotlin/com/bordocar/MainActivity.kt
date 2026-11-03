@@ -152,6 +152,16 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            Section("Navegar com") {
+                var nav by remember { mutableStateOf(prefs.s("navapp", "waze")) }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for ((k, label) in listOf("waze" to "Waze", "maps" to "Google Maps"))
+                        Box(Modifier.clip(RoundedCornerShape(10.dp)).background(if (nav == k) Accent else Color(0xFF0F1830)).clickable { nav = k; prefs.put("navapp", k) }
+                            .padding(horizontal = 16.dp, vertical = 9.dp)) { Text(label, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
+                }
+                Text("Casa, Trabalho, Favoritos, Postos e Buscar abrem a rota neste app.", color = Sub, fontSize = 12.sp)
+            }
+
             Section("Tema do painel") {
                 com.bordocar.ui.Themes.load(this@MainActivity)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -160,12 +170,13 @@ class MainActivity : ComponentActivity() {
                         Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(androidx.compose.ui.graphics.Brush.linearGradient(th.bg))
                             .border(if (on) 2.dp else 1.dp, if (on) th.accent.last() else Edge, RoundedCornerShape(12.dp))
                             .clickable { com.bordocar.ui.Themes.set(this@MainActivity, th) }.padding(vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Box(Modifier.size(22.dp).clip(RoundedCornerShape(11.dp)).background(androidx.compose.ui.graphics.Brush.linearGradient(th.accent)))
+                            Box(Modifier.size(22.dp).clip(RoundedCornerShape(11.dp)).background(androidx.compose.ui.graphics.Brush.linearGradient(
+                                if (th.key == "capa") listOf(Color(0xFFFF5A4E), Color(0xFFFFC24E), Color(0xFF2FCB8E), Color(0xFF3D8BFF), Color(0xFFB45CFF)) else th.accent)))
                             Text(th.name.substringBefore(' '), color = Color.White, fontSize = 12.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.padding(top = 6.dp))
                         }
                     }
                 }
-                Text("Também dá para trocar no carro, em Ajustes (a engrenagem).", color = Sub, fontSize = 12.sp)
+                Text("Capa: as cores acompanham a capa da música que está tocando. Também dá para trocar no carro, em Ajustes (a engrenagem).", color = Sub, fontSize = 12.sp)
             }
 
             Section("Permissões") {
@@ -202,6 +213,9 @@ class MainActivity : ComponentActivity() {
                 val raw = NavNotice.lastRaw
                 val tap = com.bordocar.car.DashSurface.lastTap
                 if (tap.isNotBlank()) Text("Último toque na tela do carro: $tap", color = Sub, fontSize = 12.sp)
+                val nn = com.bordocar.car.navNote
+                if (nn.isNotBlank()) Text("Último destino enviado: $nn", color = Sub, fontSize = 12.sp)
+                if (Weather.lastNote.isNotBlank()) Text("Clima: ${Weather.lastNote}", color = Sub, fontSize = 12.sp)
                 Text(if (raw.isBlank()) "Ainda nada lido. Comece uma rota no Waze ou no Google Maps e volte aqui para ver o que eles mostram." else "Última lida: $raw",
                     color = Sub, fontSize = 13.sp)
             }

@@ -154,7 +154,7 @@ fun Dashboard(ctx: Context, actions: DashActions, padL: Dp, padT: Dp, padR: Dp, 
     var city by remember { mutableStateOf("") }
     LaunchedEffect(Unit) {
         while (true) {
-            val p: LL? = Drive.pos
+            val p: LL? = Drive.pos ?: lastKnown(ctx)
             if (p != null) {
                 val w = withContext(Dispatchers.IO) { Weather.fetch(p) }
                 withContext(Dispatchers.IO) {
@@ -165,7 +165,7 @@ fun Dashboard(ctx: Context, actions: DashActions, padL: Dp, padT: Dp, padR: Dp, 
                     } catch (e: Exception) { }
                 }
                 if (w != null) { wx = w; delay(20 * 60_000L) } else delay(60_000L)
-            } else delay(5_000L)
+            } else { Weather.lastNote = "sem localização ainda"; delay(5_000L) }
         }
     }
     // the phone's battery (every 30 seconds)
@@ -211,6 +211,12 @@ fun Dashboard(ctx: Context, actions: DashActions, padL: Dp, padT: Dp, padR: Dp, 
     }
 }
 
+@android.annotation.SuppressLint("MissingPermission")
+private fun lastKnown(ctx: Context): LL? = try {
+    val m = ctx.getSystemService(android.location.LocationManager::class.java)
+    (m.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER) ?: m.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER))?.let { LL(it.latitude, it.longitude) }
+} catch (e: Exception) { null }
+
 // ---------------------------------------------------------------- music
 
 private fun mmss(ms: Long): String { val s = (ms / 1000L).coerceAtLeast(0L); return "%d:%02d".format(s / 60, s % 60) }
@@ -235,21 +241,20 @@ private fun MediaCard(modifier: Modifier) {
                     if (bmp != null) Image(bmp.asImageBitmap(), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                     else Icon(Icons.Rounded.MusicNote, null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size((art * 0.4f).dp))
                 }
-                Column(Modifier.weight(1f).padding(start = 22.dp)) {
-                    Label("TOCANDO AGORA")
+                Column(Modifier.weight(1f).padding(start = 22.dp), verticalArrangement = Arrangement.Center) {
                     // a long title slides along slowly (after a pause) instead of being cut off
                     androidx.compose.runtime.key(NowPlaying.title) {
                         Text(NowPlaying.title.ifBlank { "Nada tocando" }, color = Txt, fontSize = (h * 0.2f).coerceIn(18f, 30f).sp, fontWeight = FontWeight.ExtraBold, maxLines = 1,
-                            modifier = Modifier.padding(top = 8.dp).basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2500, repeatDelayMillis = 2500, velocity = 40.dp))
+                            modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2500, repeatDelayMillis = 2500, velocity = 40.dp))
                     }
-                    if (NowPlaying.artist.isNotBlank()) Text(NowPlaying.artist, color = Sub, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+                    if (NowPlaying.artist.isNotBlank()) Text(NowPlaying.artist, color = Sub, fontSize = (h * 0.13f).coerceIn(13f, 18f).sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
                     val d = NowPlaying.duration
                     if (d > 0) {
                         val pos = NowPlaying.position.coerceIn(0L, d)
-                        Box(Modifier.padding(top = 20.dp).fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)).background(Track)) {
+                        Box(Modifier.padding(top = (h * 0.09f).coerceIn(6f, 18f).dp).fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)).background(Track)) {
                             Box(Modifier.fillMaxHeight().fillMaxWidth((pos.toFloat() / d).coerceIn(0f, 1f)).background(Brush.horizontalGradient(Blue)))
                         }
-                        Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+                        Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
                             Text(mmss(pos), color = Sub, fontSize = 13.sp)
                             Spacer(Modifier.weight(1f))
                             Text("faltam " + mmss(d - pos), color = Txt, fontSize = 13.sp, fontWeight = FontWeight.Bold)

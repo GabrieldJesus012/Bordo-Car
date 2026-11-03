@@ -45,11 +45,16 @@ fun httpGet(url: String, timeoutMs: Int = 10_000): String {
 /** The weather where you are (Open-Meteo, no key needed). */
 object Weather {
     data class Now(val tempC: Double, val code: Int)
+    /** How the last lookup went (shown on the phone). */
+    @Volatile var lastNote = ""
     fun fetch(p: LL): Now? = try {
         val j = org.json.JSONObject(httpGet("https://api.open-meteo.com/v1/forecast?latitude=${p.lat}&longitude=${p.lon}&current=temperature_2m,weather_code"))
         val cur = j.getJSONObject("current")
-        Now(cur.getDouble("temperature_2m"), cur.getInt("weather_code"))
-    } catch (e: Exception) { null }
+        Now(cur.getDouble("temperature_2m"), cur.getInt("weather_code")).also { lastNote = "ok, " + java.text.SimpleDateFormat("HH:mm", java.util.Locale.US).format(java.util.Date()) }
+    } catch (e: Exception) {
+        lastNote = if (e is java.net.UnknownHostException || e is java.net.SocketTimeoutException || e is java.net.ConnectException) "sem internet (${e.javaClass.simpleName})" else "erro: ${e.javaClass.simpleName}"
+        null
+    }
 
     fun text(code: Int): String = when (code) {
         0 -> "Céu limpo"; 1, 2 -> "Poucas nuvens"; 3 -> "Nublado"; 45, 48 -> "Neblina"

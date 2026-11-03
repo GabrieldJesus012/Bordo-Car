@@ -61,9 +61,28 @@ class BordoCarService : CarAppService() {
 fun navigateTo(car: CarContext, q: String) {
     val ll = q.trim().replace(" ", "")
     val uri = if (Regex("^-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?$").matches(ll)) "geo:$ll?q=$ll" else "geo:0,0?q=" + Uri.encode(q.trim())
-    try { car.startCarApp(Intent(CarContext.ACTION_NAVIGATE, Uri.parse(uri))) }
-    catch (e: Exception) { try { CarToast.makeText(car, "Não consegui abrir o Waze ou o Google Maps", CarToast.LENGTH_LONG).show() } catch (x: Exception) { } }
+    val pm = car.packageManager
+    fun has(p: String) = try { pm.getPackageInfo(p, 0); true } catch (e: Exception) { false }
+    val choice = Prefs(car).s("navapp", "waze")
+    val order = (if (choice == "maps") listOf("com.google.android.apps.maps", "com.waze") else listOf("com.waze", "com.google.android.apps.maps")).filter { has(it) }
+    val name = mapOf("com.waze" to "Waze", "com.google.android.apps.maps" to "Google Maps")
+    for (pkg in order) {
+        try {
+            car.startCarApp(Intent(CarContext.ACTION_NAVIGATE, Uri.parse(uri)).setPackage(pkg))
+            navNote = "abriu no ${name[pkg]} ($uri)"
+            try { CarToast.makeText(car, "Abrindo no ${name[pkg]}…", CarToast.LENGTH_SHORT).show() } catch (x: Exception) { }
+            return
+        } catch (e: Exception) { navNote = "${name[pkg]} recusou: ${e.message ?: e.javaClass.simpleName}" }
+    }
+    try { car.startCarApp(Intent(CarContext.ACTION_NAVIGATE, Uri.parse(uri))); navNote = "abriu no app de navegação padrão ($uri)" }
+    catch (e: Exception) {
+        navNote = "não abriu: ${e.message ?: e.javaClass.simpleName}"
+        try { CarToast.makeText(car, "Não consegui abrir o Waze ou o Google Maps", CarToast.LENGTH_LONG).show() } catch (x: Exception) { }
+    }
 }
+
+/** What happened the last time a destination was handed over (shown on the phone, to check). */
+@Volatile var navNote = ""
 
 class BordoSession : Session() {
     private lateinit var surface: DashSurface
@@ -156,7 +175,9 @@ class SettingsScreen(carContext: CarContext) : Screen(carContext) {
         com.bordocar.ui.Themes.load(carContext)
         list.addItem(Row.Builder().setTitle("Tema do painel").addText(com.bordocar.ui.Themes.cur.name + " · toque para trocar")
             .setOnClickListener { com.bordocar.ui.Themes.next(carContext); invalidate() }.build())
-        list.addItem(Row.Builder().setTitle("Waze ou Google Maps").addText("O Android Auto abre o app de navegação que você usa por último").build())
+        val nav = Prefs(carContext).s("navapp", "waze")
+        list.addItem(Row.Builder().setTitle("Navegar com").addText((if (nav == "maps") "Google Maps" else "Waze") + " · toque para trocar")
+            .setOnClickListener { Prefs(carContext).put("navapp", if (nav == "maps") "waze" else "maps"); invalidate() }.build())
         return ListTemplate.Builder().setTitle("Bordo Car").setHeaderAction(Action.BACK).setSingleList(list.build()).build()
     }
 }
