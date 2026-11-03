@@ -519,11 +519,11 @@ private fun BottomBar(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, 
             }
             Spacer(Modifier.weight(1f))
             if (wx != null) {
+                // all on one line: ⛅ 37°  Timon · Poucas nuvens
                 Text(Weather.emoji(wx.code), fontSize = 30.sp)
-                Column(Modifier.padding(start = 12.dp)) {
-                    Text("${Math.round(wx.tempC)}°", color = Txt, fontSize = 28.sp, fontWeight = FontWeight.Bold, lineHeight = 30.sp)
-                    Text(listOf(city, Weather.text(wx.code)).filter { it.isNotBlank() }.joinToString(" · "), color = P.soft, fontSize = 15.sp, maxLines = 1)
-                }
+                Text("${Math.round(wx.tempC)}°", color = Txt, fontSize = 30.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp))
+                Text(listOf(city, Weather.text(wx.code)).filter { it.isNotBlank() }.joinToString(" · "), color = P.soft, fontSize = 18.sp, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 12.dp))
             }
         }
     }
