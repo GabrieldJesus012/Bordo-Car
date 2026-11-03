@@ -393,7 +393,7 @@ private fun TodayCard(modifier: Modifier) {
                 append(if (km < 100) String.format(BR, "%.1f", km) else "${Math.round(km)}")
                 pushStyle(SpanStyle(fontSize = 15.sp, color = Sub, fontWeight = FontWeight.Normal)); append(" km"); pop()
             }, color = Txt, fontSize = 40.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 8.dp))
-            Text(when { mins <= 0 -> "nenhuma viagem hoje"; mins < 60 -> "$mins min dirigindo"; else -> "${mins / 60} h ${"%02d".format(mins % 60)} min dirigindo" },
+            Text(when { mins <= 0 && m < 50 -> "nenhuma viagem hoje"; mins <= 0 -> "agora há pouco"; mins < 60 -> "$mins min dirigindo"; else -> "${mins / 60} h ${"%02d".format(mins % 60)} min dirigindo" },
                 color = Sub, fontSize = 14.sp, modifier = Modifier.padding(top = 2.dp))
         }
     }
