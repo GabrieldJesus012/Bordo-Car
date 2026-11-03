@@ -9,8 +9,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.max
 
-/** One trip: when it started and ended, how far and how long you were moving. */
-class Trip(val start: Long, val end: Long, val dist: Double, val moving: Long)
+/** One trip: when it started and ended, how far and how long you were moving, and where from and to (when known). */
+class Trip(val start: Long, val end: Long, val dist: Double, val moving: Long, val from: LL? = null, val to: LL? = null)
 
 /**
  * Everything the dashboard shows that comes from the GPS: speed, which way you're heading, and the distance driven (today and
@@ -38,8 +38,14 @@ object Drive {
     private var stillSince = 0L
     private var recovered = false
     private var lastHeadingPos: LL? = null
+    private var tripFrom: LL? = null
 
-    fun init(ctx: Context) { if (prefs == null) prefs = Prefs(ctx) }
+    fun init(ctx: Context) {
+        if (prefs != null) return
+        prefs = Prefs(ctx)
+        // the odometer starts from the trips already saved (versions before it existed)
+        if (prefs?.s("odo", "").isNullOrBlank()) prefs?.put("odo", trips().sumOf { it.dist }.toString())
+    }
 
     fun onLocation(ctx: Context, l: Location) {
         init(ctx)
@@ -80,14 +86,14 @@ object Drive {
             if (sp > 1.0) tripMoveSec += 1
             if (now - tripSnapAt > 20_000L) snap(now)
         } else if (sp > 1.5) {
-            tripOn = true; tripT0 = now; tripDistance = 0.0; tripMoveSec = 0; tripLast = p; tripLastAt = now
+            tripOn = true; tripT0 = now; tripDistance = 0.0; tripMoveSec = 0; tripLast = p; tripLastAt = now; tripFrom = p
         }
         // the end of a trip: standing still for two minutes
         if (sp > 4.0) { drove = true; stillSince = 0L }
         else if (sp < 0.8 && drove) {
             if (stillSince == 0L) stillSince = now
             else if (now - stillSince > 120_000) {
-                if (tripOn && tripDistance > 300) save(Trip(tripT0, stillSince, tripDistance, tripMoveSec))
+                if (tripOn && tripDistance > 300) save(Trip(tripT0, stillSince, tripDistance, tripMoveSec, tripFrom, p))
                 tripOn = false; drove = false; stillSince = 0L
                 prefs?.put("tripcur", "")
                 tick++
@@ -98,7 +104,7 @@ object Drive {
     /** The car was switched off (or the phone unplugged): the trip being driven ends and is saved now. */
     fun endTrip() {
         try {
-            if (tripOn && tripDistance > 300) save(Trip(tripT0, System.currentTimeMillis(), tripDistance, tripMoveSec))
+            if (tripOn && tripDistance > 300) save(Trip(tripT0, System.currentTimeMillis(), tripDistance, tripMoveSec, tripFrom, pos))
             tripOn = false; drove = false; stillSince = 0L
             prefs?.put("tripcur", "")
         } catch (e: Exception) { }
@@ -106,7 +112,11 @@ object Drive {
 
     private fun snap(now: Long) {
         tripSnapAt = now
-        try { prefs?.put("tripcur", JSONObject().put("s", tripT0).put("d", tripDistance).put("m", tripMoveSec).put("at", now).toString()) } catch (e: Exception) { }
+        try {
+            val o = JSONObject().put("s", tripT0).put("d", tripDistance).put("m", tripMoveSec).put("at", now)
+            tripFrom?.let { o.put("fl", it.lat).put("fo", it.lon) }; pos?.let { o.put("tl", it.lat).put("to", it.lon) }
+            prefs?.put("tripcur", o.toString())
+        } catch (e: Exception) { }
     }
 
     /** A trip left over from before (the app was closed while driving): carried on when it was moments ago, otherwise saved. */
@@ -118,8 +128,9 @@ object Drive {
             val o = JSONObject(s)
             if (now - o.optLong("at") < 5 * 60_000L && !tripOn) {
                 tripOn = true; tripT0 = o.getLong("s"); tripDistance = o.getDouble("d"); tripMoveSec = o.getLong("m"); tripLast = null; drove = true
+                tripFrom = ll(o, "fl", "fo")
             } else {
-                if (o.getDouble("d") > 300) save(Trip(o.getLong("s"), o.optLong("at"), o.getDouble("d"), o.getLong("m")))
+                if (o.getDouble("d") > 300) save(Trip(o.getLong("s"), o.optLong("at"), o.getDouble("d"), o.getLong("m"), ll(o, "fl", "fo"), ll(o, "tl", "to")))
                 prefs?.put("tripcur", "")
             }
         } catch (e: Exception) { prefs?.put("tripcur", "") }
@@ -131,15 +142,37 @@ object Drive {
         return try {
             val a = JSONArray(s)
             (0 until a.length()).mapNotNull { i ->
-                try { val o = a.getJSONObject(i); Trip(o.getLong("s"), o.getLong("e"), o.getDouble("d"), o.getLong("m")) } catch (e: Exception) { null }
+                try { val o = a.getJSONObject(i); Trip(o.getLong("s"), o.getLong("e"), o.getDouble("d"), o.getLong("m"), ll(o, "fl", "fo"), ll(o, "tl", "to")) } catch (e: Exception) { null }
             }
         } catch (e: Exception) { emptyList() }
     }
 
+    private fun ll(o: JSONObject, a: String, b: String): LL? = if (o.has(a) && o.has(b)) LL(o.getDouble(a), o.getDouble(b)) else null
+
     private fun save(t: Trip) {
         val a = JSONArray()
-        (listOf(t) + trips()).take(400).forEach { a.put(JSONObject().put("s", it.start).put("e", it.end).put("d", it.dist).put("m", it.moving)) }
+        (listOf(t) + trips()).take(1500).forEach {
+            val o = JSONObject().put("s", it.start).put("e", it.end).put("d", it.dist).put("m", it.moving)
+            it.from?.let { f -> o.put("fl", f.lat).put("fo", f.lon) }; it.to?.let { e -> o.put("tl", e.lat).put("to", e.lon) }
+            a.put(o)
+        }
         prefs?.put("trips", a.toString())
+        // the odometer: every km ever counted (for the fuel figures)
+        prefs?.put("odo", (odometerSaved() + t.dist).toString())
+        tick++
+    }
+
+    private fun odometerSaved(): Double = prefs?.s("odo", "0")?.toDoubleOrNull() ?: 0.0
+    /** Every metre counted so far, the trip being driven included. */
+    fun odometer(): Double = odometerSaved() + (if (tripOn) tripDistance else 0.0)
+
+    /** Distance (m), time moving (s) and trips this month. */
+    fun month(): Triple<Double, Long, Int> {
+        val c = java.util.Calendar.getInstance().apply { set(java.util.Calendar.DAY_OF_MONTH, 1); set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0) }
+        val list = trips().filter { it.start >= c.timeInMillis }
+        var d = list.sumOf { it.dist }; var s = list.sumOf { it.moving }; var n = list.size
+        if (tripOn && tripT0 >= c.timeInMillis) { d += tripDistance; s += tripMoveSec; n++ }
+        return Triple(d, s, n)
     }
 
     private fun dayStart(): Long = java.util.Calendar.getInstance().apply {

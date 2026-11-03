@@ -70,6 +70,8 @@ class DriveService : Service(), LocationListener {
         try { lm?.removeUpdates(this) } catch (e: Exception) { }
         lm = null
         running = false
+        // the car was switched off: where it was left (not near Casa / Trabalho), and the trip ends
+        try { Parking.note(this, Drive.pos) } catch (e: Exception) { }
         Drive.endTrip()
         super.onDestroy()
     }

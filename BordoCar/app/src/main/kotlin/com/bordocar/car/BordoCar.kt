@@ -71,6 +71,8 @@ class BordoSession : Session() {
     override fun onCreateScreen(intent: Intent): Screen {
         val app = carContext.applicationContext
         Drive.init(app)
+        // back in the car: it's no longer parked anywhere
+        com.bordocar.Parking.clear(app)
         // the GPS keeps counting while Waze or Maps is on the car screen
         DriveService.start(app)
         val screen = DashScreen(carContext)
