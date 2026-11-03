@@ -31,6 +31,9 @@ jobs:
           APP=com.bordocar.app
           mkdir -p out
           adb install -r -g BordoCar.apk
+          # no "app isn't responding" windows over the screenshots
+          adb shell settings put global hide_error_dialogs 1 || true
+          adb shell pm disable-user --user 0 com.google.android.apps.nexuslauncher > /dev/null 2>&1 || true
           adb shell pm grant $APP android.permission.ACCESS_FINE_LOCATION || true
           adb shell settings put system accelerometer_rotation 0
           adb shell settings put system user_rotation 1
