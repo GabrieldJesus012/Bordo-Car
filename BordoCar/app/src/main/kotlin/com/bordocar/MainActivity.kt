@@ -152,6 +152,22 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            Section("Tema do painel") {
+                com.bordocar.ui.Themes.load(this@MainActivity)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    for (th in com.bordocar.ui.Themes.all) {
+                        val on = com.bordocar.ui.Themes.cur.key == th.key
+                        Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(androidx.compose.ui.graphics.Brush.linearGradient(th.bg))
+                            .border(if (on) 2.dp else 1.dp, if (on) th.accent.last() else Edge, RoundedCornerShape(12.dp))
+                            .clickable { com.bordocar.ui.Themes.set(this@MainActivity, th) }.padding(vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Box(Modifier.size(22.dp).clip(RoundedCornerShape(11.dp)).background(androidx.compose.ui.graphics.Brush.linearGradient(th.accent)))
+                            Text(th.name.substringBefore(' '), color = Color.White, fontSize = 12.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.padding(top = 6.dp))
+                        }
+                    }
+                }
+                Text("Também dá para trocar no carro, em Ajustes (a engrenagem).", color = Sub, fontSize = 12.sp)
+            }
+
             Section("Permissões") {
                 val loc = has(Manifest.permission.ACCESS_FINE_LOCATION)
                 val notif = Build.VERSION.SDK_INT < 33 || has(Manifest.permission.POST_NOTIFICATIONS)

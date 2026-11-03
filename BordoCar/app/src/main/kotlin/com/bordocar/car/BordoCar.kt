@@ -151,6 +151,9 @@ class SettingsScreen(carContext: CarContext) : Screen(carContext) {
             list.addItem(Row.Builder().setTitle(label).addText(v.ifBlank { "Toque para definir" }).setBrowsable(true)
                 .setOnClickListener { screenManager.push(SearchScreen(carContext, key to label)) }.build())
         }
+        com.bordocar.ui.Themes.load(carContext)
+        list.addItem(Row.Builder().setTitle("Tema do painel").addText(com.bordocar.ui.Themes.cur.name + " · toque para trocar")
+            .setOnClickListener { com.bordocar.ui.Themes.next(carContext); invalidate() }.build())
         list.addItem(Row.Builder().setTitle("Waze ou Google Maps").addText("O Android Auto abre o app de navegação que você usa por último").build())
         return ListTemplate.Builder().setTitle("Bordo Car").setHeaderAction(Action.BACK).setSingleList(list.build()).build()
     }

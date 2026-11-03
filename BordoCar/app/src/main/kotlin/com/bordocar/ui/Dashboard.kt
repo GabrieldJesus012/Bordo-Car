@@ -7,6 +7,7 @@ import android.os.BatteryManager
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -80,14 +81,16 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 
 // ---- the look: deep navy, glassy cards with a soft blue edge ----
-private val Bg = Brush.radialGradient(listOf(Color(0xFF1B2A4E), Color(0xFF0B1222), Color(0xFF070B16)), center = Offset(300f, 0f), radius = 2200f)
-private val CardBg = Brush.linearGradient(listOf(Color(0xC028385C), Color(0xD912192E)))
-private val Edge = Color(0x3878A0FF)
+// (all from the chosen theme, so changing it repaints the dashboard)
+private val P get() = Themes.cur
+private val Bg get() = Brush.radialGradient(P.bg, center = Offset(300f, 0f), radius = 2200f)
+private val CardBg get() = Brush.linearGradient(P.card)
+private val Edge get() = P.edge
 private val Txt = Color(0xFFEEF3FF)
-private val Sub = Color(0xFF9FB0D0)
-private val Lbl = Color(0xFF8FA3C8)
-private val Track = Color(0xFF1E2A44)
-private val Blue = listOf(Color(0xFF1E6BFF), Color(0xFF5CC8FF))
+private val Sub get() = P.sub
+private val Lbl get() = P.label
+private val Track get() = P.track
+private val Blue get() = P.accent
 private val Lime = Color(0xFFB6F35A)
 private val BR = Locale("pt", "BR")
 
@@ -137,6 +140,7 @@ private fun Label(text: String, modifier: Modifier = Modifier) =
  */
 @Composable
 fun Dashboard(ctx: Context, actions: DashActions, padL: Dp, padT: Dp, padR: Dp, padB: Dp) {
+    remember { Themes.load(ctx); 0 }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -232,8 +236,11 @@ private fun MediaCard(modifier: Modifier) {
                 }
                 Column(Modifier.weight(1f).padding(start = 22.dp)) {
                     Label("TOCANDO AGORA")
-                    Text(NowPlaying.title.ifBlank { "Nada tocando" }, color = Txt, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1,
-                        overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+                    // a long title slides along slowly (after a pause) instead of being cut off
+                    androidx.compose.runtime.key(NowPlaying.title) {
+                        Text(NowPlaying.title.ifBlank { "Nada tocando" }, color = Txt, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1,
+                            modifier = Modifier.padding(top = 8.dp).basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2500, repeatDelayMillis = 2500, velocity = 40.dp))
+                    }
                     if (NowPlaying.artist.isNotBlank()) Text(NowPlaying.artist, color = Sub, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
                     val d = NowPlaying.duration
                     if (d > 0) {
@@ -258,11 +265,11 @@ private fun MediaCard(modifier: Modifier) {
 @Composable
 private fun TurnCard(modifier: Modifier) {
     val shape = RoundedCornerShape(22.dp)
-    Box(modifier.clip(shape).background(Brush.linearGradient(listOf(Color(0xFF1E6BFF), Color(0xFF0E3FA8)))).border(1.dp, Color(0xFF5CC8FF), shape)) {
+    Box(modifier.clip(shape).background(Brush.linearGradient(P.turn)).border(1.dp, P.turnEdge, shape)) {
         Column(Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(NavNotice.app.uppercase(BR), color = Color(0xFF04122B), fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Color(0xFF33CCFF)).padding(horizontal = 6.dp, vertical = 1.dp))
+                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(P.badge).padding(horizontal = 6.dp, vertical = 1.dp))
                 Text("PRÓXIMA CURVA", color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp, modifier = Modifier.padding(start = 8.dp))
             }
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
@@ -333,7 +340,7 @@ private fun SpeedCard(modifier: Modifier) {
             }
         }
         Text(if (lim != null) (if (Limits.estimated) "limite $lim km/h (estimado)" else "limite $lim km/h") else "limite --",
-            color = Color(0xFFC9D6F2), fontSize = 14.sp, maxLines = 1, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp))
+            color = P.soft, fontSize = 14.sp, maxLines = 1, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp))
     }
 }
 
@@ -347,6 +354,7 @@ private fun CompassCard(modifier: Modifier) {
         BoxWithConstraints(Modifier.fillMaxSize().padding(top = 34.dp, bottom = 34.dp)) {
             val d = minOf(maxWidth, maxHeight)
             val n = androidx.compose.ui.text.rememberTextMeasurer()
+            val tickHi = P.accent.last(); val tickLo = P.tick; val letterCol = P.sub
             Canvas(Modifier.size(d).align(Alignment.Center)) {
                 val r = size.minDimension / 2f
                 val c = Offset(size.width / 2f, size.height / 2f)
@@ -357,14 +365,14 @@ private fun CompassCard(modifier: Modifier) {
                         val a = Math.toRadians(i * 15.0)
                         val major = i % 6 == 0
                         val r0 = r * (if (major) 0.80f else 0.86f)
-                        drawLine(if (major) Color(0xFF5CC8FF) else Color(0xFF3A4A6A),
+                        drawLine(if (major) tickHi else tickLo,
                             Offset(c.x + (r0 * Math.sin(a)).toFloat(), c.y - (r0 * Math.cos(a)).toFloat()),
                             Offset(c.x + (r * 0.93f * Math.sin(a)).toFloat(), c.y - (r * 0.93f * Math.cos(a)).toFloat()), strokeWidth = if (major) 3f else 1.5f)
                     }
                     val letters = listOf("N" to 0.0, "L" to 90.0, "S" to 180.0, "O" to 270.0)
                     for ((t, deg) in letters) {
                         val a = Math.toRadians(deg)
-                        val lay = n.measure(t, androidx.compose.ui.text.TextStyle(color = if (t == "N") Color(0xFFFF5A5A) else Color(0xFF9FB0D0), fontSize = 15.sp, fontWeight = FontWeight.Bold))
+                        val lay = n.measure(t, androidx.compose.ui.text.TextStyle(color = if (t == "N") Color(0xFFFF5A5A) else letterCol, fontSize = 15.sp, fontWeight = FontWeight.Bold))
                         val p = Offset(c.x + (r * 0.62f * Math.sin(a)).toFloat() - lay.size.width / 2f, c.y - (r * 0.62f * Math.cos(a)).toFloat() - lay.size.height / 2f)
                         drawText(lay, topLeft = p)
                     }
@@ -372,14 +380,14 @@ private fun CompassCard(modifier: Modifier) {
                 val arrow = Path().apply {
                     moveTo(c.x, c.y - r * 0.42f); lineTo(c.x + r * 0.16f, c.y + r * 0.18f); lineTo(c.x, c.y + r * 0.06f); lineTo(c.x - r * 0.16f, c.y + r * 0.18f); close()
                 }
-                drawPath(arrow, Color(0xFF5CC8FF))
+                drawPath(arrow, tickHi)
             }
         }
         Text(if (hd != null) buildAnnotatedString {
                 pushStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Txt)); append(cardinal(hd)); pop()
                 append(" · ${Math.round(hd)}°")
             } else buildAnnotatedString { append("aguardando o GPS") },
-            color = Color(0xFFC9D6F2), fontSize = 14.sp, maxLines = 1, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp))
+            color = P.soft, fontSize = 14.sp, maxLines = 1, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp))
     }
 }
 
@@ -416,16 +424,17 @@ private fun WeekCard(modifier: Modifier) {
                 pushStyle(SpanStyle(fontSize = 15.sp, color = Sub, fontWeight = FontWeight.Normal)); append(" km"); pop()
             }, color = Txt, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 4.dp))
             val max = (days.maxOrNull() ?: 0.0).coerceAtLeast(1000.0)
+            val barCol = P.bar; val trackCol = Track
             Canvas(Modifier.fillMaxWidth().weight(1f).padding(top = 8.dp)) {
                 val gap = size.width * 0.03f
                 val bw = (size.width - gap * 6) / 7f
                 for (i in 0 until 7) {
                     val x = i * (bw + gap)
-                    drawRoundRect(Track, Offset(x, 0f), Size(bw, size.height), CornerRadius(bw * 0.18f))
+                    drawRoundRect(trackCol, Offset(x, 0f), Size(bw, size.height), CornerRadius(bw * 0.18f))
                     val f = (days[i] / max).toFloat().coerceIn(0f, 1f)
                     if (f > 0f) {
                         val bh = (size.height * f).coerceAtLeast(size.height * 0.08f)
-                        drawRoundRect(if (i == today) Lime else Color(0xFF3D8BFF), Offset(x, size.height - bh), Size(bw, bh), CornerRadius(bw * 0.18f))
+                        drawRoundRect(if (i == today) Lime else barCol, Offset(x, size.height - bh), Size(bw, bh), CornerRadius(bw * 0.18f))
                     }
                 }
             }
@@ -455,8 +464,8 @@ private fun BottomBar(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, 
                 val col = if (bat < 15) Color(0xFFFF4D4D) else if (bat < 30) Color(0xFFFFA63D) else Lime
                 Canvas(Modifier.padding(start = 26.dp).size(34.dp, 17.dp)) {
                     val w = size.width; val h = size.height
-                    drawRoundRect(Color(0xFFC9D6F2), Offset(1f, 1f), Size(w * 0.86f - 2f, h - 2f), CornerRadius(h * 0.22f), style = Stroke(2.2f))
-                    drawRoundRect(Color(0xFFC9D6F2), Offset(w * 0.88f, h * 0.3f), Size(w * 0.09f, h * 0.4f), CornerRadius(2f))
+                    drawRoundRect(P.soft, Offset(1f, 1f), Size(w * 0.86f - 2f, h - 2f), CornerRadius(h * 0.22f), style = Stroke(2.2f))
+                    drawRoundRect(P.soft, Offset(w * 0.88f, h * 0.3f), Size(w * 0.09f, h * 0.4f), CornerRadius(2f))
                     drawRoundRect(col, Offset(4f, 4f), Size((w * 0.86f - 8f) * (bat / 100f), h - 8f), CornerRadius(h * 0.12f))
                 }
                 Text("$bat%", color = Txt, fontSize = 26.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
@@ -467,7 +476,7 @@ private fun BottomBar(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, 
                 Text(Weather.emoji(wx.code), fontSize = 30.sp)
                 Column(Modifier.padding(start = 12.dp)) {
                     Text("${Math.round(wx.tempC)}°", color = Txt, fontSize = 28.sp, fontWeight = FontWeight.Bold, lineHeight = 30.sp)
-                    Text(listOf(city, Weather.text(wx.code)).filter { it.isNotBlank() }.joinToString(" · "), color = Color(0xFFC9D6F2), fontSize = 15.sp, maxLines = 1)
+                    Text(listOf(city, Weather.text(wx.code)).filter { it.isNotBlank() }.joinToString(" · "), color = P.soft, fontSize = 15.sp, maxLines = 1)
                 }
             }
         }
