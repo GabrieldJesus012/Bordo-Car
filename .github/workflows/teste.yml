@@ -63,6 +63,7 @@ jobs:
             grep -q 'Ver prévia' ui.xml && break
             adb shell input swipe 500 900 500 300 400; sleep 1
           done
+          tap "Wait"; sleep 1; tap "Aguardar"; sleep 1
           tap "Ver prévia (14 s)"; sleep 4; adb exec-out screencap -p > out/5-esportivo-curva.png
           sleep 6; adb exec-out screencap -p > out/6-esportivo-sem-rota.png
           adb logcat -d > out/logcat.txt
