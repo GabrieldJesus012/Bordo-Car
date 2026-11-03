@@ -177,10 +177,9 @@ class SettingsScreen(carContext: CarContext) : Screen(carContext) {
             .setOnClickListener { com.bordocar.ui.Themes.next(carContext); invalidate() }.build())
         com.bordocar.ui.Sport.load(carContext)
         list.addItem(Row.Builder().setTitle("Painel esportivo (acima de ${com.bordocar.ui.Sport.ON_KMH} km/h)")
-            .addText(if (com.bordocar.ui.Sport.enabled) "Ligado · ao ligar, mostra uma prévia" else "Desligado · ao ligar, mostra uma prévia")
+            .addText(if (com.bordocar.ui.Sport.enabled) "Ligado" else "Desligado")
             .setToggle(androidx.car.app.model.Toggle.Builder { on ->
-                com.bordocar.ui.Sport.set(carContext, on)
-                if (on) screenManager.popToRoot() else invalidate()     // back to the dashboard, to see the preview
+                com.bordocar.ui.Sport.set(carContext, on); invalidate()
             }.setChecked(com.bordocar.ui.Sport.enabled).build()).build())
         list.addItem(Row.Builder().setTitle("Ver prévia do painel esportivo").addText("Mostra por 14 segundos")
             .setOnClickListener { com.bordocar.ui.Sport.preview(); screenManager.popToRoot() }.build())

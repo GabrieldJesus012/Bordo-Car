@@ -72,7 +72,7 @@ object Sport {
         private set
     private var loaded = false
     fun load(ctx: Context) { if (loaded) return; loaded = true; enabled = Prefs(ctx).b("sport", false) }
-    fun set(ctx: Context, on: Boolean) { enabled = on; Prefs(ctx).put("sport", on); if (on) preview() else previewFrom = 0L }
+    fun set(ctx: Context, on: Boolean) { enabled = on; Prefs(ctx).put("sport", on) }
     fun preview() { previewFrom = System.currentTimeMillis() }
     fun previewing(now: Long) = previewFrom > 0L && now - previewFrom in 0 until PREVIEW_MS
     /** Called once a second with the speed in km/h. */

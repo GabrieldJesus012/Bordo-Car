@@ -172,11 +172,11 @@ class MainActivity : ComponentActivity() {
                         Text("Acima de ${com.bordocar.ui.Sport.ON_KMH} km/h", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                         Text("Troca para o painel esportivo, com a próxima curva dentro da bússola, e volta ao normal abaixo de ${com.bordocar.ui.Sport.OFF_KMH} km/h.", color = Sub, fontSize = 12.sp)
                     }
-                    androidx.compose.material3.Switch(on, { com.bordocar.ui.Sport.set(this@MainActivity, it); if (it) scope.launch { scroll.animateScrollTo(0) } })
+                    androidx.compose.material3.Switch(on, { com.bordocar.ui.Sport.set(this@MainActivity, it) })
                 }
                 Box(Modifier.padding(top = 8.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF0F1830)).clickable { com.bordocar.ui.Sport.preview(); scope.launch { scroll.animateScrollTo(0) } }
                     .padding(horizontal = 16.dp, vertical = 9.dp)) { Text("Ver prévia (14 s)", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
-                Text("A prévia aparece no painel aqui em cima e na tela do carro, se estiver conectado. Ao ligar, ela também aparece sozinha.", color = Sub, fontSize = 12.sp)
+                Text("A prévia aparece no painel aqui em cima e na tela do carro, se estiver conectado.", color = Sub, fontSize = 12.sp)
             }
 
             Section("Tema do painel") {
