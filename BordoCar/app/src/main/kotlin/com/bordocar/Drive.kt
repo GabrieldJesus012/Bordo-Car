@@ -180,6 +180,9 @@ object Drive {
     }.timeInMillis
 
     /** Distance (m) and time moving (s) driven today: the trips saved today plus the one being driven now. */
+    /** How many trips today (the one going on counts). */
+    fun todayTrips(): Int { val d0 = dayStart(); return trips().count { it.start >= d0 } + (if (tripOn && tripT0 >= d0) 1 else 0) }
+
     fun today(): Pair<Double, Long> {
         val d0 = dayStart()
         val list = trips().filter { it.start >= d0 }

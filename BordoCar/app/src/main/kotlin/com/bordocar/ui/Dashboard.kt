@@ -419,17 +419,33 @@ private fun TodayCard(modifier: Modifier) {
     val (m, secs) = Drive.today()
     val km = m / 1000.0
     val mins = (secs / 60L).toInt()
+    val n = Drive.todayTrips()
     Card(modifier) {
       BoxWithConstraints(Modifier.fillMaxSize()) {
-        val big = (maxHeight.value * 0.30f).coerceIn(18f, 44f)
-        Column(Modifier.align(Alignment.CenterStart).padding(horizontal = 18.dp, vertical = 10.dp)) {
+        val h = maxHeight.value
+        val roomy = h >= 120f                        // room for the line of small numbers underneath
+        val big = (h * (if (roomy) 0.30f else 0.40f)).coerceIn(20f, 60f)
+        val small = (h * 0.10f).coerceIn(13f, 20f)
+        val cap = (h * 0.055f).coerceIn(9f, 12f)
+        Column(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Label("KM HOJE")
             Text(buildAnnotatedString {
                 append(if (km < 100) String.format(BR, "%.1f", km) else "${Math.round(km)}")
-                pushStyle(SpanStyle(fontSize = 15.sp, color = Sub, fontWeight = FontWeight.Normal)); append(" km"); pop()
-            }, color = Txt, fontSize = big.sp, lineHeight = (big * 1.15f).sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 4.dp))
-            Text(when { mins <= 0 && m < 50 -> "nenhuma viagem hoje"; mins <= 0 -> "agora há pouco"; mins < 60 -> "$mins min dirigindo"; else -> "${mins / 60} h ${"%02d".format(mins % 60)} min dirigindo" },
-                color = Sub, fontSize = 14.sp, modifier = Modifier.padding(top = 2.dp))
+                pushStyle(SpanStyle(fontSize = (big * 0.34f).sp, color = Sub, fontWeight = FontWeight.Normal)); append(" km"); pop()
+            }, color = Txt, fontSize = big.sp, lineHeight = (big * 1.12f).sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+            if (roomy) {
+                Box(Modifier.padding(top = 4.dp, bottom = 6.dp).fillMaxWidth(0.72f).height(1.dp).background(Edge))
+                val drive = if (mins < 60) "$mins min" else "${mins / 60}h ${"%02d".format(mins % 60)}"
+                val avg = if (secs >= 60) "${Math.round(km / (secs / 3600.0))}" else "–"
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    for ((v, l) in listOf(drive to "DIRIGINDO", avg to "KM/H MÉDIA", "$n" to if (n == 1) "VIAGEM" else "VIAGENS"))
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(v, color = Txt, fontSize = small.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            Text(l, color = Lbl, fontSize = cap.sp, letterSpacing = 1.sp, maxLines = 1)
+                        }
+                }
+            } else Text(if (n == 0) "nenhuma viagem hoje" else "$n ${if (n == 1) "viagem" else "viagens"} · ${if (mins < 60) "$mins min" else "${mins / 60}h ${"%02d".format(mins % 60)}"}",
+                color = Sub, fontSize = 13.sp, maxLines = 1)
         }
       }
     }
