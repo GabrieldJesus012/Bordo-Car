@@ -27,6 +27,7 @@ class DriveService : Service(), LocationListener {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        running = true
         startForegroundNotice()
         startGps()
         return START_STICKY
@@ -68,12 +69,15 @@ class DriveService : Service(), LocationListener {
     override fun onDestroy() {
         try { lm?.removeUpdates(this) } catch (e: Exception) { }
         lm = null
+        running = false
         Drive.endTrip()
         super.onDestroy()
     }
 
     companion object {
         private const val CH = "drive"
+        /** True while the car is connected (the phone's own screen then leaves the GPS to this service). */
+        @Volatile var running = false
         fun start(ctx: Context) {
             try {
                 val i = Intent(ctx, DriveService::class.java)

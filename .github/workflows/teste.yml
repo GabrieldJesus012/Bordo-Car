@@ -1,0 +1,71 @@
+name: Teste no emulador
+# (no celular: Actions > "Teste no emulador" > Run workflow)
+# Builds the app, opens it on an Android emulator (phone screen, which shows a live preview of the car dashboard), drives a short
+# simulated trip with the GPS and keeps screenshots and the log on the "teste" release.
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with: { distribution: temurin, java-version: 17 }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: 8.14.4 }
+      - name: Build
+        working-directory: BordoCar
+        run: gradle :app:assembleRelease
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - name: Write the test script
+        run: |
+          cp BordoCar/app/build/outputs/bordo/BordoCar.apk .
+          cat > drive.sh <<'EOF'
+          set -x
+          APP=com.bordocar.app
+          mkdir -p out
+          adb install -r -g BordoCar.apk
+          adb shell pm grant $APP android.permission.ACCESS_FINE_LOCATION || true
+          adb shell settings put system accelerometer_rotation 0
+          adb shell settings put system user_rotation 1
+          lat=-5.0920; lon=-42.8038
+          fixat() { adb emu geo fix $lon $lat 70 8 $1 > /dev/null; }
+          fixat 0
+          adb logcat -c
+          adb shell monkey -p $APP -c android.intent.category.LAUNCHER 1
+          sleep 15
+          adb exec-out screencap -p > out/1-tela.png
+          # a short drive at 50 km/h going north (the phone screen reads the GPS itself while it's open)
+          for i in $(seq 1 40); do lat=$(python3 -c "print(f'{$lat + 13.9/111320:.7f}')"); fixat 27; sleep 1; done
+          adb exec-out screencap -p > out/2-dirigindo.png
+          adb logcat -d > out/logcat.txt
+          grep -E "FATAL EXCEPTION|AndroidRuntime" -A8 out/logcat.txt | head -60 > out/erros.txt || true
+          cat out/erros.txt
+          [ -n "$(adb shell pidof $APP)" ] || { echo "::error::O app não está aberto no fim do teste"; exit 1; }
+          if grep -A3 "FATAL EXCEPTION" out/logcat.txt | grep -q "$APP"; then echo "::error::O app travou"; exit 1; fi
+          echo "OK"
+          EOF
+      - name: Run the emulator test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: bash drive.sh
+      - name: Publish the results
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create teste --repo "${{ github.repository }}" --title "Teste no emulador" --notes "Resultado do último teste" --prerelease --latest=false 2>/dev/null || true
+          [ -f out/logcat.txt ] && gzip -kf out/logcat.txt
+          for f in out/*.png out/erros.txt out/logcat.txt.gz; do [ -f "$f" ] && gh release upload teste "$f" --repo "${{ github.repository }}" --clobber; done

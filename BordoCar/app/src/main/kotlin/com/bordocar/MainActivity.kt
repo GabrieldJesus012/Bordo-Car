@@ -69,7 +69,37 @@ class MainActivity : ComponentActivity() {
         setContent { Screen() }
     }
 
-    override fun onResume() { super.onResume(); refresh.intValue++ }
+    override fun onResume() { super.onResume(); refresh.intValue++; startGps() }
+    override fun onPause() { super.onPause(); stopGps() }
+
+    // with the phone's screen open (and the car not connected), the preview shows your speed and compass live
+    private var lm: android.location.LocationManager? = null
+    private val gps = object : android.location.LocationListener {
+        override fun onLocationChanged(l: android.location.Location) {
+            if (DriveService.running) return
+            try { Drive.onLocation(this@MainActivity, l); Drive.pos?.let { Limits.update(it, Drive.heading) } } catch (e: Exception) { }
+        }
+        override fun onProviderDisabled(provider: String) {}
+        override fun onProviderEnabled(provider: String) {}
+        @Deprecated("Needed on Android 10 and older")
+        @Suppress("DEPRECATION")
+        override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+    }
+    @android.annotation.SuppressLint("MissingPermission")
+    private fun startGps() {
+        if (lm != null || !has(Manifest.permission.ACCESS_FINE_LOCATION)) return
+        try {
+            val m = getSystemService(android.location.LocationManager::class.java)
+            m.requestLocationUpdates(android.location.LocationManager.GPS_PROVIDER, 1000L, 0f, gps, mainLooper)
+            lm = m
+        } catch (e: Exception) { }
+    }
+    private fun stopGps() { try { lm?.removeUpdates(gps) } catch (e: Exception) { }; lm = null }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        refresh.intValue++; startGps()
+    }
 
     private fun has(p: String) = ContextCompat.checkSelfPermission(this, p) == PackageManager.PERMISSION_GRANTED
 
