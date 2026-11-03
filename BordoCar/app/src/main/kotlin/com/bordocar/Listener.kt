@@ -26,7 +26,8 @@ class Listener : NotificationListenerService() {
     }
     override fun onNotificationPosted(sbn: StatusBarNotification?) { sbn?.let { take(it) } }
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
-        if (sbn != null && sbn.packageName == NavNotice.pkg) NavNotice.clear()
+        // Maps sometimes takes the notice down and puts it back a moment later: only end the route if it doesn't come back soon
+        if (sbn != null && sbn.key == NavNotice.key) NavNotice.removedAt = System.currentTimeMillis()
     }
 
     private fun take(sbn: StatusBarNotification) {
@@ -38,8 +39,12 @@ class Listener : NotificationListenerService() {
         val text = (x.getCharSequence(Notification.EXTRA_TEXT) ?: x.getCharSequence(Notification.EXTRA_BIG_TEXT))?.toString().orEmpty().trim()
         val sub = x.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString().orEmpty().trim()
         NavNotice.lastRaw = "$app · $title · $text · $sub"
-        // only a turn instruction (it has a distance in it), not "Waze is running" and the like
-        if (!Regex("\\d").containsMatchIn(title + text)) { if (NavNotice.pkg == sbn.packageName) NavNotice.clear(); return }
+        // a route starts with a turn instruction (it has a distance in it), not "Waze is running" and the like; after that, the same
+        // notice keeps the card up even when it has no distance (a long straight: "Siga pela BR-343", "Continue em frente")
+        if (NavNotice.removedAt > 0L && System.currentTimeMillis() - NavNotice.removedAt > 8_000L) NavNotice.clear()   // that route ended
+        val sameRoute = sbn.key == NavNotice.key && NavNotice.title.isNotBlank()
+        if (!Regex("\\d").containsMatchIn(title + text) && !sameRoute) return
+        if (title.isBlank() && text.isBlank()) { NavNotice.at = System.currentTimeMillis(); NavNotice.removedAt = 0L; return }
         val icon: Bitmap? = try {
             n.getLargeIcon()?.loadDrawable(this)?.let { d ->
                 val w = d.intrinsicWidth.coerceIn(1, 256); val h = d.intrinsicHeight.coerceIn(1, 256)
@@ -47,8 +52,11 @@ class Listener : NotificationListenerService() {
             }
         } catch (e: Exception) { null }
         NavNotice.pkg = sbn.packageName
+        NavNotice.key = sbn.key
+        NavNotice.removedAt = 0L
         NavNotice.app = app
-        NavNotice.title = title; NavNotice.text = text; NavNotice.sub = sub; NavNotice.icon = icon
+        NavNotice.title = title.ifBlank { text }; NavNotice.text = if (title.isBlank()) "" else text; NavNotice.sub = sub
+        if (icon != null || !sameRoute) NavNotice.icon = icon
         NavNotice.at = System.currentTimeMillis()
     }
 }
@@ -57,6 +65,9 @@ class Listener : NotificationListenerService() {
 object NavNotice {
     val apps = mapOf("com.waze" to "Waze", "com.google.android.apps.maps" to "Google Maps")
     var pkg = ""
+    /** Which notice the route is in, and when it was taken down (0 = it's up). */
+    var key = ""
+    @Volatile var removedAt = 0L
     var app by mutableStateOf("")
     var title by mutableStateOf("")
     var text by mutableStateOf("")
@@ -65,8 +76,11 @@ object NavNotice {
     var at by mutableLongStateOf(0L)
     /** The last navigation notice seen, as it came (shown on the phone, to check what Waze / Maps send). */
     var lastRaw by mutableStateOf("")
-    fun active(now: Long = System.currentTimeMillis()) = title.isNotBlank() && now - at < 10 * 60_000L
-    fun clear() { pkg = ""; app = ""; title = ""; text = ""; sub = ""; icon = null; at = 0L }
+    fun active(now: Long = System.currentTimeMillis()): Boolean {
+        if (removedAt > 0L && now - removedAt > 8_000L) return false
+        return title.isNotBlank() && now - at < 30 * 60_000L
+    }
+    fun clear() { pkg = ""; key = ""; removedAt = 0L; app = ""; title = ""; text = ""; sub = ""; icon = null; at = 0L }
 }
 
 /** What's playing in the music app (Spotify, YouTube Music...), read once a second while the dashboard shows. */
