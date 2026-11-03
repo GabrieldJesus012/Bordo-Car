@@ -125,6 +125,11 @@ class DashScreen(carContext: CarContext) : Screen(carContext) {
     override fun onGetTemplate(): Template {
         val strip = ActionStrip.Builder()
             .addAction(Action.Builder().setIcon(icon(R.drawable.ic_car_search)).setOnClickListener { screenManager.push(SearchScreen(carContext, null)) }.build())
+            // switches between the dashboard's modes (Normal, Esportivo, Música, Estrada)
+            .addAction(Action.Builder().setIcon(icon(R.drawable.ic_car_layout)).setOnClickListener {
+                com.bordocar.ui.Modes.load(carContext); com.bordocar.ui.Modes.next(carContext)
+                try { CarToast.makeText(carContext, "Painel: " + com.bordocar.ui.Modes.name(), CarToast.LENGTH_SHORT).show() } catch (e: Exception) { }
+            }.build())
             .addAction(Action.Builder().setIcon(icon(R.drawable.ic_car_settings)).setOnClickListener { screenManager.push(SettingsScreen(carContext)) }.build())
             .build()
         // (some cars only pass taps on the screen to apps whose layout has the "move" button: it lets the dashboard's shortcuts work)
