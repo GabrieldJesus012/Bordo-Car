@@ -200,6 +200,8 @@ class MainActivity : ComponentActivity() {
 
             Section("Próxima curva do Waze / Maps") {
                 val raw = NavNotice.lastRaw
+                val tap = com.bordocar.car.DashSurface.lastTap
+                if (tap.isNotBlank()) Text("Último toque na tela do carro: $tap", color = Sub, fontSize = 12.sp)
                 Text(if (raw.isBlank()) "Ainda nada lido. Comece uma rota no Waze ou no Google Maps e volte aqui para ver o que eles mostram." else "Última lida: $raw",
                     color = Sub, fontSize = 13.sp)
             }

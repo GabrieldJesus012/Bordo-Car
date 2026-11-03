@@ -108,7 +108,9 @@ class DashScreen(carContext: CarContext) : Screen(carContext) {
             .addAction(Action.Builder().setIcon(icon(R.drawable.ic_car_search)).setOnClickListener { screenManager.push(SearchScreen(carContext, null)) }.build())
             .addAction(Action.Builder().setIcon(icon(R.drawable.ic_car_settings)).setOnClickListener { screenManager.push(SettingsScreen(carContext)) }.build())
             .build()
-        return NavigationTemplate.Builder().setActionStrip(strip).build()
+        // (some cars only pass taps on the screen to apps whose layout has the "move" button: it lets the dashboard's shortcuts work)
+        val mapStrip = ActionStrip.Builder().addAction(Action.PAN).build()
+        return NavigationTemplate.Builder().setActionStrip(strip).setMapActionStrip(mapStrip).build()
     }
 }
 
@@ -233,7 +235,10 @@ class DashSurface(private val carContext: CarContext, private val actions: DashA
     override fun onSurfaceDestroyed(surfaceContainer: SurfaceContainer) { display?.surface = null }
     override fun onVisibleAreaChanged(visibleArea: Rect) { area.value = Rect(visibleArea) }
     override fun onStableAreaChanged(stableArea: Rect) {}
-    override fun onClick(x: Float, y: Float) { try { CarTaps.hit(x, y) } catch (e: Exception) { } }
+    override fun onClick(x: Float, y: Float) {
+        try { lastTap = "%.0f, %.0f".format(java.util.Locale.US, x, y) + if (CarTaps.hit(x, y)) " (botão)" else " (fora dos botões)" } catch (e: Exception) { }
+    }
+    companion object { @Volatile var lastTap = "" }
 
     fun release() {
         try { owner.stop() } catch (e: Exception) { }

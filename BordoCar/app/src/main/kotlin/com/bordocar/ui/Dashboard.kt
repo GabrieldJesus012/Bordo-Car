@@ -273,14 +273,25 @@ private fun TurnCard(modifier: Modifier) {
                     modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(P.badge).padding(horizontal = 6.dp, vertical = 1.dp))
                 Text("PRÓXIMA CURVA", color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp, modifier = Modifier.padding(start = 8.dp))
             }
-            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                val ic = NavNotice.icon
-                if (ic != null) Image(ic.asImageBitmap(), null, colorFilter = ColorFilter.tint(Color.White), modifier = Modifier.size(92.dp))
-                else Icon(Icons.Rounded.Navigation, null, tint = Color.White, modifier = Modifier.size(80.dp))
-                Column(Modifier.padding(start = 20.dp)) {
-                    Text(NavNotice.title, color = Color.White, fontSize = 40.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 44.sp)
-                    if (NavNotice.text.isNotBlank()) Text(NavNotice.text, color = Color.White, fontSize = 20.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
-                    if (NavNotice.sub.isNotBlank()) Text(NavNotice.sub, color = Color.White.copy(alpha = 0.8f), fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                val h = maxHeight.value
+                val big = (h * 0.34f).coerceIn(18f, 40f)
+                Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                    val ic = NavNotice.icon
+                    val isz = (h * 0.8f).coerceIn(36f, 92f)
+                    if (ic != null) Image(ic.asImageBitmap(), null, colorFilter = ColorFilter.tint(Color.White), modifier = Modifier.size(isz.dp))
+                    else Icon(Icons.Rounded.Navigation, null, tint = Color.White, modifier = Modifier.size(isz.dp))
+                    Column(Modifier.padding(start = 16.dp)) {
+                        androidx.compose.runtime.key(NavNotice.title) {
+                            Text(NavNotice.title, color = Color.White, fontSize = big.sp, lineHeight = (big * 1.12f).sp, fontWeight = FontWeight.ExtraBold, maxLines = 1,
+                                modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2000, repeatDelayMillis = 2000, velocity = 40.dp))
+                        }
+                        if (NavNotice.text.isNotBlank()) androidx.compose.runtime.key(NavNotice.text) {
+                            Text(NavNotice.text, color = Color.White, fontSize = (big * 0.5f).coerceIn(12f, 20f).sp, maxLines = 1,
+                                modifier = Modifier.padding(top = 2.dp).basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2000, repeatDelayMillis = 2000, velocity = 40.dp))
+                        }
+                        if (NavNotice.sub.isNotBlank() && h > 90) Text(NavNotice.sub, color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                    }
                 }
             }
         }
@@ -292,27 +303,32 @@ private fun TurnCard(modifier: Modifier) {
 @Composable
 private fun Shortcuts(actions: DashActions, modifier: Modifier) {
     Card(modifier) {
-        Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 16.dp)) {
-            Label("PARA ONDE?")
-            Row(Modifier.fillMaxWidth().weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                Shortcut(Icons.Rounded.Home, Color(0xFF2E6BFF), "Casa", "sc-home", Modifier.weight(1f)) { actions.home() }
-                Shortcut(Icons.Rounded.Work, Color(0xFFF29900), "Trabalho", "sc-work", Modifier.weight(1f)) { actions.work() }
-                Shortcut(Icons.Rounded.Star, Color(0xFFE0A800), "Favoritos", "sc-favs", Modifier.weight(1f)) { actions.favourites() }
-                Shortcut(Icons.Rounded.LocalGasStation, Color(0xFF12A4B4), "Postos", "sc-fuel", Modifier.weight(1f)) { actions.fuel() }
-                Shortcut(Icons.Rounded.Search, Color(0xFF8E5CF0), "Buscar", "sc-search", Modifier.weight(1f)) { actions.search() }
+        Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 12.dp)) {
+            Label("PARA ONDE?", Modifier.carTap("sc-label") { actions.search() })
+            BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+            val h = maxHeight.value
+            Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                Shortcut(Icons.Rounded.Home, Color(0xFF2E6BFF), "Casa", "sc-home", h, Modifier.weight(1f)) { actions.home() }
+                Shortcut(Icons.Rounded.Work, Color(0xFFF29900), "Trabalho", "sc-work", h, Modifier.weight(1f)) { actions.work() }
+                Shortcut(Icons.Rounded.Star, Color(0xFFE0A800), "Favoritos", "sc-favs", h, Modifier.weight(1f)) { actions.favourites() }
+                Shortcut(Icons.Rounded.LocalGasStation, Color(0xFF12A4B4), "Postos", "sc-fuel", h, Modifier.weight(1f)) { actions.fuel() }
+                Shortcut(Icons.Rounded.Search, Color(0xFF8E5CF0), "Buscar", "sc-search", h, Modifier.weight(1f)) { actions.search() }
             }
-            Text("abre no Waze ou no Google Maps", color = Lbl, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            }
         }
     }
 }
 
 @Composable
-private fun Shortcut(icon: ImageVector, color: Color, label: String, id: String, modifier: Modifier, action: () -> Unit) {
+private fun Shortcut(icon: ImageVector, color: Color, label: String, id: String, h: Float, modifier: Modifier, action: () -> Unit) {
+    // with little height the name goes, and the icon fills the space
+    val withName = h >= 84f
+    val sz = (if (withName) h - 30f else h - 6f).coerceIn(34f, 62f)
     Column(modifier.carTap(id, action), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(58.dp).clip(RoundedCornerShape(17.dp)).background(color), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = Color.White, modifier = Modifier.size(31.dp))
+        Box(Modifier.size(sz.dp).clip(RoundedCornerShape((sz * 0.29f).dp)).background(color), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = Color.White, modifier = Modifier.size((sz * 0.54f).dp))
         }
-        Text(label, color = Txt, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
+        if (withName) Text(label, color = Txt, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.padding(top = 6.dp))
     }
 }
 
@@ -325,7 +341,7 @@ private fun SpeedCard(modifier: Modifier) {
     val over = lim != null && kmh > lim + 3
     Card(modifier) {
         Label("VELOCIDADE", Modifier.align(Alignment.TopCenter).padding(top = 12.dp))
-        BoxWithConstraints(Modifier.fillMaxSize().padding(top = 30.dp, bottom = 28.dp)) {
+        BoxWithConstraints(Modifier.fillMaxSize().padding(top = 28.dp, bottom = 8.dp)) {
             val d = minOf(maxWidth, maxHeight)
             Canvas(Modifier.size(d).align(Alignment.Center)) {
                 val sw = size.minDimension * 0.06f
@@ -341,8 +357,7 @@ private fun SpeedCard(modifier: Modifier) {
                 Text("km/h", color = Sub, fontSize = (big * 0.24f).coerceIn(10f, 14f).sp)
             }
         }
-        Text(if (lim != null) (if (Limits.estimated) "limite $lim km/h (estimado)" else "limite $lim km/h") else "limite --",
-            color = P.soft, fontSize = 14.sp, maxLines = 1, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp))
+
     }
 }
 
