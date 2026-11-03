@@ -274,7 +274,7 @@ private fun MediaCard(modifier: Modifier) {
 // ---------------------------------------------------------------- next turn (Waze / Google Maps)
 
 @Composable
-private fun TurnCard(modifier: Modifier) {
+private fun TurnCard(modifier: Modifier, music: Boolean = false) {
     val shape = RoundedCornerShape(22.dp)
     Box(modifier.clip(shape).background(Brush.linearGradient(P.turn)).border(1.dp, P.turnEdge, shape)) {
         Column(Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 16.dp)) {
@@ -308,6 +308,11 @@ private fun TurnCard(modifier: Modifier) {
                         if (NavNotice.sub.isNotBlank() && h > 90) Text(NavNotice.sub, color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
                     }
                 }
+            }
+            // (Estrada) the song playing, small, under the turn
+            if (music && NowPlaying.title.isNotBlank()) androidx.compose.runtime.key(NowPlaying.title) {
+                Text("♪ " + NowPlaying.title + (if (NowPlaying.artist.isNotBlank()) " — " + NowPlaying.artist else ""), color = Color.White.copy(alpha = 0.85f), fontSize = 16.sp, maxLines = 1,
+                    modifier = Modifier.padding(top = 4.dp).basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2500, repeatDelayMillis = 2500, velocity = 40.dp))
             }
         }
     }
@@ -729,7 +734,7 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
                 }
             }
             Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (navigating) TurnCard(Modifier.weight(0.46f).fillMaxHeight()) else MediaCard(Modifier.weight(0.46f).fillMaxHeight())
+                if (navigating) TurnCard(Modifier.weight(0.46f).fillMaxHeight(), music = true) else MediaCard(Modifier.weight(0.46f).fillMaxHeight())
                 Column(Modifier.weight(0.54f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     val kmh = Math.round((Drive.speed * 3.6).coerceAtLeast(0.0)).toInt()
                     val avg = if (doneS >= 60) Math.round(doneM / 1000.0 / (doneS / 3600.0)).toInt() else null
