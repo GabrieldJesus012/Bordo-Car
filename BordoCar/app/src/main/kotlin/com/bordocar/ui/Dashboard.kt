@@ -187,7 +187,9 @@ fun Dashboard(ctx: Context, actions: DashActions, padL: Dp, padT: Dp, padR: Dp, 
     val navigating = NavNotice.active(now)
 
     Box(Modifier.fillMaxSize().background(Bg)) {
-        Column(Modifier.fillMaxSize().padding(start = padL, top = padT, end = padR, bottom = padB), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.fillMaxSize().padding(start = padL, top = padT, end = padR, bottom = padB), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            // the time, battery and weather along the top: Android Auto's search and settings buttons sit in its right end
+            BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp))
             Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Column(Modifier.weight(0.46f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     MediaCard(Modifier.fillMaxWidth().weight(if (navigating) 1f else 1.25f))
@@ -205,7 +207,6 @@ fun Dashboard(ctx: Context, actions: DashActions, padL: Dp, padT: Dp, padR: Dp, 
                     }
                 }
             }
-            BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(74.dp))
         }
     }
 }
@@ -238,7 +239,7 @@ private fun MediaCard(modifier: Modifier) {
                     Label("TOCANDO AGORA")
                     // a long title slides along slowly (after a pause) instead of being cut off
                     androidx.compose.runtime.key(NowPlaying.title) {
-                        Text(NowPlaying.title.ifBlank { "Nada tocando" }, color = Txt, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1,
+                        Text(NowPlaying.title.ifBlank { "Nada tocando" }, color = Txt, fontSize = (h * 0.2f).coerceIn(18f, 30f).sp, fontWeight = FontWeight.ExtraBold, maxLines = 1,
                             modifier = Modifier.padding(top = 8.dp).basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2500, repeatDelayMillis = 2500, velocity = 40.dp))
                     }
                     if (NowPlaying.artist.isNotBlank()) Text(NowPlaying.artist, color = Sub, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
@@ -324,7 +325,7 @@ private fun SpeedCard(modifier: Modifier) {
     val over = lim != null && kmh > lim + 3
     Card(modifier) {
         Label("VELOCIDADE", Modifier.align(Alignment.TopCenter).padding(top = 12.dp))
-        BoxWithConstraints(Modifier.fillMaxSize().padding(top = 30.dp, bottom = 30.dp)) {
+        BoxWithConstraints(Modifier.fillMaxSize().padding(top = 30.dp, bottom = 28.dp)) {
             val d = minOf(maxWidth, maxHeight)
             Canvas(Modifier.size(d).align(Alignment.Center)) {
                 val sw = size.minDimension * 0.06f
@@ -334,9 +335,10 @@ private fun SpeedCard(modifier: Modifier) {
                 val cols = if (over) listOf(Color(0xFFFF8A4D), Color(0xFFFF3B3B)) else Blue
                 if (f > 0.003f) drawArc(Brush.horizontalGradient(cols), 135f, 270f * f, false, tl, sz, style = Stroke(sw, cap = StrokeCap.Round))
             }
+            val big = (d.value * 0.34f).coerceIn(18f, 64f)
             Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("$kmh", color = if (over) Color(0xFFFF6B5A) else Txt, fontSize = 60.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 60.sp)
-                Text("km/h", color = Sub, fontSize = 14.sp)
+                Text("$kmh", color = if (over) Color(0xFFFF6B5A) else Txt, fontSize = big.sp, fontWeight = FontWeight.ExtraBold, lineHeight = (big * 1.1f).sp)
+                Text("km/h", color = Sub, fontSize = (big * 0.24f).coerceIn(10f, 14f).sp)
             }
         }
         Text(if (lim != null) (if (Limits.estimated) "limite $lim km/h (estimado)" else "limite $lim km/h") else "limite --",
@@ -398,15 +400,18 @@ private fun TodayCard(modifier: Modifier) {
     val km = m / 1000.0
     val mins = (secs / 60L).toInt()
     Card(modifier) {
-        Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
+      BoxWithConstraints(Modifier.fillMaxSize()) {
+        val big = (maxHeight.value * 0.30f).coerceIn(18f, 44f)
+        Column(Modifier.align(Alignment.CenterStart).padding(horizontal = 18.dp, vertical = 10.dp)) {
             Label("KM HOJE")
             Text(buildAnnotatedString {
                 append(if (km < 100) String.format(BR, "%.1f", km) else "${Math.round(km)}")
                 pushStyle(SpanStyle(fontSize = 15.sp, color = Sub, fontWeight = FontWeight.Normal)); append(" km"); pop()
-            }, color = Txt, fontSize = 40.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 8.dp))
+            }, color = Txt, fontSize = big.sp, lineHeight = (big * 1.15f).sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 4.dp))
             Text(when { mins <= 0 && m < 50 -> "nenhuma viagem hoje"; mins <= 0 -> "agora há pouco"; mins < 60 -> "$mins min dirigindo"; else -> "${mins / 60} h ${"%02d".format(mins % 60)} min dirigindo" },
                 color = Sub, fontSize = 14.sp, modifier = Modifier.padding(top = 2.dp))
         }
+      }
     }
 }
 
@@ -417,12 +422,14 @@ private fun WeekCard(modifier: Modifier) {
     val today = (java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK) + 5) % 7
     val total = days.sum() / 1000.0
     Card(modifier) {
-        Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 14.dp)) {
+      BoxWithConstraints(Modifier.fillMaxSize()) {
+        val big = (maxHeight.value * 0.20f).coerceIn(15f, 30f)
+        Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 10.dp)) {
             Label("KM DA SEMANA")
             Text(buildAnnotatedString {
                 append(if (total < 100) String.format(BR, "%.1f", total) else "${Math.round(total)}")
-                pushStyle(SpanStyle(fontSize = 15.sp, color = Sub, fontWeight = FontWeight.Normal)); append(" km"); pop()
-            }, color = Txt, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 4.dp))
+                pushStyle(SpanStyle(fontSize = 13.sp, color = Sub, fontWeight = FontWeight.Normal)); append(" km"); pop()
+            }, color = Txt, fontSize = big.sp, lineHeight = (big * 1.15f).sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 2.dp))
             val max = (days.maxOrNull() ?: 0.0).coerceAtLeast(1000.0)
             val barCol = P.bar; val trackCol = Track
             Canvas(Modifier.fillMaxWidth().weight(1f).padding(top = 8.dp)) {
@@ -444,17 +451,18 @@ private fun WeekCard(modifier: Modifier) {
                         textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
             }
         }
+      }
     }
 }
 
-// ---------------------------------------------------------------- bottom bar: time, battery, weather
+// ---------------------------------------------------------------- top bar: time, battery, weather
 
 @Composable
 private fun BottomBar(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: String, modifier: Modifier) {
     val d = java.util.Date(now)
     Card(modifier) {
-        Row(Modifier.fillMaxSize().padding(horizontal = 22.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(java.text.SimpleDateFormat("HH:mm", BR).format(d), color = Txt, fontSize = 46.sp, fontWeight = FontWeight.ExtraBold)
+        Row(Modifier.fillMaxSize().padding(start = 22.dp, end = 170.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(java.text.SimpleDateFormat("HH:mm", BR).format(d), color = Txt, fontSize = 40.sp, fontWeight = FontWeight.ExtraBold)
             Column(Modifier.padding(start = 16.dp)) {
                 Text(java.text.SimpleDateFormat("EEEE", BR).format(d).replaceFirstChar { it.uppercase() }, color = Sub, fontSize = 15.sp)
                 Text(java.text.SimpleDateFormat("d 'de' MMMM", BR).format(d), color = Sub, fontSize = 15.sp)

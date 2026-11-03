@@ -219,7 +219,8 @@ class DashSurface(private val carContext: CarContext, private val actions: DashA
                     fun px(v: Int) = (v.coerceAtLeast(0) / d.density).dp
                     val l = px(a?.left ?: 0); val t = px(a?.top ?: 0)
                     val r = px(width - (a?.right ?: width)); val b = px(height - (a?.bottom ?: height))
-                    Dashboard(appCtx, actions, l + 16.dp, t + 14.dp, r + 16.dp, b + 12.dp)
+                    // (the top: Android Auto counts its two buttons there as covered, but the dashboard's top bar is made to sit under them)
+                    Dashboard(appCtx, actions, l + 16.dp, 12.dp, r + 16.dp, b + 12.dp)
                 }
             }
             root.addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
