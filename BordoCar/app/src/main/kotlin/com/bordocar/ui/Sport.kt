@@ -113,6 +113,9 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
             // the time, battery and weather (Android Auto's buttons sit at the right end)
             Row(Modifier.fillMaxWidth().height(52.dp).padding(start = 12.dp, end = 170.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(java.text.SimpleDateFormat("HH:mm", BRL).format(java.util.Date(now)), color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
+                // the day and month next to the time: "ter, 3 de novembro"
+                Text(java.text.SimpleDateFormat("EEE, d 'de' MMMM", BRL).format(java.util.Date(now)).replace(".", ""), color = Soft, fontSize = 18.sp,
+                    maxLines = 1, modifier = Modifier.padding(start = 14.dp))
                 if (bat >= 0) Text((if (charging) "⚡ " else "🔋 ") + "$bat%", color = Soft, fontSize = 20.sp, modifier = Modifier.padding(start = 20.dp))
                 if (preview) Text("PRÉVIA", color = Color(0xFF1A0A0A), fontSize = 13.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(start = 20.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFFFFC24E)).padding(horizontal = 8.dp, vertical = 2.dp))
