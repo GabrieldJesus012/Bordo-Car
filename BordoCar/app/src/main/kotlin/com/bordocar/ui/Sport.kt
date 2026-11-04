@@ -137,8 +137,8 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
                 Spacer(Modifier.weight(1f))
                 if (wx != null) Text("${Weather.emoji(wx.code)} ${Math.round(wx.tempC)}°" + (if (city.isNotBlank()) " $city" else ""), color = Soft, fontSize = 20.sp, maxLines = 1)
             }
-            val limTop = if (preview) 80 else com.bordocar.Limits.kmh
-            Leds(kmh, limTop != null && kmh > limTop, (now / 500L) % 2L == 0L, Modifier.fillMaxWidth().height(20.dp).padding(horizontal = 12.dp))
+            // the lights stay as they are above the limit: it's the limit's circle that blinks
+            Leds(kmh, false, true, Modifier.fillMaxWidth().height(20.dp).padding(horizontal = 12.dp))
             Row(Modifier.fillMaxWidth().weight(1f).padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 // speed (as big as it fits), the limit of the road, the top speed of the trip, and the bars of the last minutes
                 val lim = if (preview) 80 else com.bordocar.Limits.kmh
@@ -158,10 +158,12 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
                         val mins = if (preview) listOf(76, 88, 93, 108, 96, kmh) else Sport.minutes(now)
                         Bars(mins, Modifier.fillMaxWidth().height((colH * 0.3f).coerceIn(70f, 170f).dp).padding(bottom = 4.dp))
                     }
+                    // above the limit the circle blinks (red / white)
+                    val flash = over && blinkOn
                     if (lim != null) Box(Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 4.dp).size((colH * 0.11f).coerceIn(40f, 64f).dp)
-                        .clip(androidx.compose.foundation.shape.CircleShape).background(Color.White).border((colH * 0.012f).coerceIn(4f, 7f).dp, Red, androidx.compose.foundation.shape.CircleShape),
+                        .clip(androidx.compose.foundation.shape.CircleShape).background(if (flash) Red else Color.White).border((colH * 0.012f).coerceIn(4f, 7f).dp, Red, androidx.compose.foundation.shape.CircleShape),
                         contentAlignment = Alignment.Center) {
-                        Text("$lim", color = Color(0xFF111111), fontSize = (colH * 0.04f).coerceIn(15f, 24f).sp, fontWeight = FontWeight.ExtraBold)
+                        Text("$lim", color = if (flash) Color.White else Color(0xFF111111), fontSize = (colH * 0.04f).coerceIn(15f, 24f).sp, fontWeight = FontWeight.ExtraBold)
                     }
                 }
                 // the compass ring, with the next turn inside it

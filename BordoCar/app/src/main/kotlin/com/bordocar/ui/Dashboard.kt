@@ -148,7 +148,7 @@ fun Dashboard(ctx: Context, actions: DashActions, padL: Dp, padT: Dp, padR: Dp, 
             now = System.currentTimeMillis()
             try { NowPlaying.refresh(ctx) } catch (e: Exception) { }
             Sport.update(Math.round((Drive.speed * 3.6).coerceAtLeast(0.0)).toInt())
-            delay(if (Sport.previewing(now)) 250L else 1000L)
+            delay(if (Sport.previewing(now)) 250L else if (Modes.cur == "esportivo" || Sport.showing(now)) 500L else 1000L)
         }
     }
     // the weather and the town where you are (every 20 minutes)
