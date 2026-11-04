@@ -146,7 +146,7 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
                 val blinkOn = (now / 500L) % 2L == 0L
                 BoxWithConstraints(Modifier.weight(0.3f).fillMaxHeight().padding(start = 12.dp)) {
                     val digits = "$kmh".length.coerceAtLeast(2)
-                    val big = minOf(maxHeight.value * 0.40f, maxWidth.value * (if (lim != null) 0.8f else 0.95f) / (digits * 0.56f)).coerceIn(40f, 260f)
+                    val big = minOf(maxHeight.value * 0.52f, maxWidth.value * (if (lim != null) 0.8f else 0.95f) / (digits * 0.56f)).coerceIn(40f, 260f)
                     val colH = maxHeight.value
                     Column(Modifier.fillMaxSize()) {
                         Text("VELOCIDADE", color = Grey, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
@@ -156,7 +156,7 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
                         Text(buildString { append("km/h"); if (mx > 0) append(" · MÁX $mx") }, color = Soft, fontSize = (big * 0.1f).coerceIn(14f, 22f).sp, maxLines = 1)
                         Spacer(Modifier.weight(1f))
                         val mins = if (preview) listOf(76, 88, 93, 108, 96, kmh) else Sport.minutes(now)
-                        Bars(mins, Modifier.fillMaxWidth().height((colH * 0.3f).coerceIn(70f, 170f).dp).padding(bottom = 4.dp))
+                        Bars(mins, Modifier.fillMaxWidth().height((colH * 0.25f).coerceIn(64f, 150f).dp).padding(bottom = 4.dp))
                     }
                     // above the limit the circle blinks (red / white)
                     val flash = over && blinkOn
