@@ -5,6 +5,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -40,6 +41,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -76,7 +78,20 @@ object Sport {
     fun preview() { previewFrom = System.currentTimeMillis() }
     fun previewing(now: Long) = previewFrom > 0L && now - previewFrom in 0 until PREVIEW_MS
     /** Called once a second with the speed in km/h. */
-    fun update(kmh: Int) { if (kmh >= ON_KMH) fast = true else if (kmh < OFF_KMH) fast = false }
+    fun update(kmh: Int) {
+        if (kmh >= ON_KMH) fast = true else if (kmh < OFF_KMH) fast = false
+        // the average speed of each minute, for the bars (the last 6 minutes)
+        val m = System.currentTimeMillis() / 60_000L
+        val b = buckets.getOrPut(m) { longArrayOf(0L, 0L) }
+        b[0] += kmh.toLong(); b[1]++
+        buckets.keys.filter { it < m - 5 }.forEach { buckets.remove(it) }
+    }
+    private val buckets = java.util.TreeMap<Long, LongArray>()
+    /** Average km/h of the last 6 minutes, oldest first (null when there's nothing for that minute); the last one is now. */
+    fun minutes(now: Long): List<Int?> {
+        val m = now / 60_000L
+        return (5 downTo 0).map { k -> buckets[m - k]?.let { if (it[1] > 0) (it[0] / it[1]).toInt() else null } }
+    }
     fun showing(now: Long) = previewing(now) || (enabled && fast)
 }
 
@@ -122,21 +137,35 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
                 Spacer(Modifier.weight(1f))
                 if (wx != null) Text("${Weather.emoji(wx.code)} ${Math.round(wx.tempC)}°" + (if (city.isNotBlank()) " $city" else ""), color = Soft, fontSize = 20.sp, maxLines = 1)
             }
-            Leds(kmh, Modifier.fillMaxWidth().height(20.dp).padding(horizontal = 12.dp))
+            val limTop = if (preview) 80 else com.bordocar.Limits.kmh
+            Leds(kmh, limTop != null && kmh > limTop, (now / 500L) % 2L == 0L, Modifier.fillMaxWidth().height(20.dp).padding(horizontal = 12.dp))
             Row(Modifier.fillMaxWidth().weight(1f).padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                // speed
+                // speed (as big as it fits), the limit of the road, the top speed of the trip, and the bars of the last minutes
+                val lim = if (preview) 80 else com.bordocar.Limits.kmh
+                val over = lim != null && kmh > lim
+                val blinkOn = (now / 500L) % 2L == 0L
                 BoxWithConstraints(Modifier.weight(0.3f).fillMaxHeight().padding(start = 12.dp)) {
-                    val big = (minOf(maxHeight.value * 0.42f, maxWidth.value * 0.42f)).coerceIn(40f, 170f)
-                    Column(Modifier.align(Alignment.CenterStart)) {
+                    val digits = "$kmh".length.coerceAtLeast(2)
+                    val big = minOf(maxHeight.value * 0.40f, maxWidth.value / (digits * 0.56f)).coerceIn(40f, 260f)
+                    Column(Modifier.fillMaxSize()) {
                         Text("VELOCIDADE", color = Grey, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-                        Text("$kmh", color = Color.White, fontSize = big.sp, lineHeight = (big * 1.02f).sp, fontWeight = FontWeight.ExtraBold, fontStyle = FontStyle.Italic, maxLines = 1)
-                        Text("km/h", color = Grey, fontSize = (big * 0.17f).coerceIn(14f, 26f).sp, fontStyle = FontStyle.Italic)
+                        Text("$kmh", color = if (over) Color(0xFFFF5A4A) else Color.White, fontSize = big.sp, lineHeight = (big * 0.98f).sp, fontWeight = FontWeight.ExtraBold,
+                            fontStyle = FontStyle.Italic, maxLines = 1, letterSpacing = (-big * 0.03f).sp)
+                        val mx = if (preview) 112 else Drive.tripMax
+                        Text(buildString { append("km/h"); if (mx > 0) append(" · MÁX $mx") }, color = Soft, fontSize = (big * 0.1f).coerceIn(14f, 22f).sp, maxLines = 1)
+                        Spacer(Modifier.weight(1f))
+                        val mins = if (preview) listOf(76, 88, 93, 108, 96, kmh) else Sport.minutes(now)
+                        Bars(mins, Modifier.fillMaxWidth().height((maxHeight.value * 0.3f).coerceIn(70f, 170f).dp).padding(bottom = 4.dp))
                     }
-                    Music(Modifier.align(Alignment.BottomStart).padding(bottom = 6.dp))
+                    if (lim != null) Box(Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 4.dp).size((maxHeight.value * 0.11f).coerceIn(40f, 64f).dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape).background(Color.White).border((maxHeight.value * 0.012f).coerceIn(4f, 7f).dp, Red, androidx.compose.foundation.shape.CircleShape),
+                        contentAlignment = Alignment.Center) {
+                        Text("$lim", color = Color(0xFF111111), fontSize = (maxHeight.value * 0.04f).coerceIn(15f, 24f).sp, fontWeight = FontWeight.ExtraBold)
+                    }
                 }
                 // the compass ring, with the next turn inside it
-                Box(Modifier.weight(0.4f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(Modifier.weight(0.4f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    BoxWithConstraints(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                         val d = minOf(maxWidth, maxHeight)
                         Ring(hd, route, Modifier.size(d))
                         Column(Modifier.size(d * 0.7f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -160,15 +189,65 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
                             }
                         }
                     }
+                    Music(Modifier.padding(top = 4.dp, bottom = 2.dp))
                 }
-                // the route, this trip, today
-                Column(Modifier.weight(0.3f).fillMaxHeight().padding(end = 12.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.SpaceEvenly) {
-                    if (route && turnSub.isNotBlank()) Stat("ROTA", turnSub, null, small = true)
-                    val cur = Drive.current()
-                    val tripKm = if (preview && cur == null) 48.3 else (cur?.first ?: 0.0) / 1000.0
-                    val tripMin = if (preview && cur == null) 38 else ((cur?.second ?: 0L) / 60L).toInt()
-                    Stat("ESTA VIAGEM", km(tripKm), if (tripMin > 0) (if (tripMin < 60) "$tripMin min" else "${tripMin / 60}h ${"%02d".format(tripMin % 60)}") else null)
-                    if (!(route && turnSub.isNotBlank())) Stat("KM HOJE", km(Drive.today().first / 1000.0), null)
+                // the route, this trip and today side by side, the g-force
+                BoxWithConstraints(Modifier.weight(0.3f).fillMaxHeight().padding(end = 12.dp)) {
+                    val gsz = (maxHeight.value * 0.48f).coerceAtMost(maxWidth.value * 0.7f)
+                    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.End) {
+                        if (route && turnSub.isNotBlank()) Stat("ROTA", turnSub, null, small = true)
+                        val cur = Drive.current()
+                        val tripKm = if (preview && cur == null) 48.3 else (cur?.first ?: 0.0) / 1000.0
+                        val tripMin = if (preview && cur == null) 38 else ((cur?.second ?: 0L) / 60L).toInt()
+                        Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+                            Stat("ESTA VIAGEM", km(tripKm), if (tripMin > 0) (if (tripMin < 60) "$tripMin min" else "${tripMin / 60}h ${"%02d".format(tripMin % 60)}") else null)
+                            Stat("KM HOJE", km(if (preview && cur == null) 16.7 else Drive.today().first / 1000.0), null)
+                        }
+                        Spacer(Modifier.weight(1f))
+                        val gx = if (preview) (kotlin.math.sin(now / 900.0) * 0.3).toFloat() else Drive.gLat
+                        val gy = if (preview) (kotlin.math.cos(now / 1300.0) * 0.2).toFloat() else Drive.gLon
+                        GMeter(gx, gy, Modifier.size(gsz.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The g-force: the dot goes to the side of the turn, up when braking and down when speeding up (full circle = 0,5 G). */
+@Composable
+private fun GMeter(gx: Float, gy: Float, modifier: Modifier) {
+    val g = kotlin.math.sqrt(gx * gx + gy * gy)
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Canvas(Modifier.fillMaxWidth().weight(1f)) {
+            val r = size.minDimension / 2f; val c = Offset(size.width / 2f, size.height / 2f)
+            drawCircle(Color(0xFF0E0E11), r, c); drawCircle(Color(0xFF333338), r - 1.5f, c, style = Stroke(3f))
+            drawCircle(Color(0xFF2A2A30), r * 0.66f, c, style = Stroke(1.5f)); drawCircle(Color(0xFF2A2A30), r * 0.33f, c, style = Stroke(1.5f))
+            drawLine(Color(0xFF2A2A30), Offset(c.x - r, c.y), Offset(c.x + r, c.y), 1.5f); drawLine(Color(0xFF2A2A30), Offset(c.x, c.y - r), Offset(c.x, c.y + r), 1.5f)
+            val k = r * 0.9f / 0.5f
+            val p = Offset(c.x + (gx * k).coerceIn(-r * 0.9f, r * 0.9f), c.y - (-gy * k).coerceIn(-r * 0.9f, r * 0.9f))
+            drawCircle(RedHi.copy(alpha = 0.3f), r * 0.16f, p); drawCircle(RedHi, r * 0.1f, p)
+        }
+        Text(String.format(BRL, "%.1f G", g), color = Soft, fontSize = 15.sp, modifier = Modifier.padding(top = 4.dp))
+    }
+}
+
+/** One bar per minute (the last 5 and this one), with its average speed on top. */
+@Composable
+private fun Bars(mins: List<Int?>, modifier: Modifier) {
+    BoxWithConstraints(modifier) {
+        val h = maxHeight.value
+        val num = (h * 0.15f).coerceIn(12f, 20f)
+        val cap = (h * 0.1f).coerceIn(10f, 14f)
+        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Bottom) {
+            mins.forEachIndexed { i, v ->
+                val nowBar = i == mins.lastIndex
+                Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Bottom) {
+                    Text(v?.toString() ?: "–", color = Color.White, fontSize = num.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                    val f = if (v == null) 0.04f else ((v - 30f) / 110f).coerceIn(0.06f, 1f)
+                    Box(Modifier.padding(top = 2.dp).fillMaxWidth().height(((h - num * 1.4f - cap * 1.6f - 8f) * f).coerceAtLeast(3f).dp).clip(RoundedCornerShape(5.dp))
+                        .background(if (nowBar) RedHi else Color(0xFF7A2A2A)))
+                    Text(if (nowBar) "agora" else "-${mins.lastIndex - i} min", color = Grey, fontSize = cap.sp, maxLines = 1, modifier = Modifier.padding(top = 2.dp))
                 }
             }
         }
@@ -197,13 +276,14 @@ private fun Music(modifier: Modifier) {
 
 /** The row of lights: green, then yellow, then red, lit up to the speed (full at 140 km/h). */
 @Composable
-private fun Leds(kmh: Int, modifier: Modifier) {
+private fun Leds(kmh: Int, over: Boolean, blinkOn: Boolean, modifier: Modifier) {
     Canvas(modifier) {
         val n = 24; val gap = size.width * 0.006f
         val w = (size.width - gap * (n - 1)) / n
-        val lit = (kmh / 140f * n).toInt().coerceIn(0, n)
+        // above the road's limit: all red, blinking
+        val lit = if (over) (if (blinkOn) n else 0) else (kmh / 140f * n).toInt().coerceIn(0, n)
         for (i in 0 until n) {
-            val c = when { i < n * 0.38f -> Color(0xFF2FCB8E); i < n * 0.67f -> Color(0xFFFFC24E); else -> Red }
+            val c = if (over) Red else when { i < n * 0.38f -> Color(0xFF2FCB8E); i < n * 0.67f -> Color(0xFFFFC24E); else -> Red }
             val x = i * (w + gap)
             if (i < lit) {
                 drawRoundRect(c.copy(alpha = 0.28f), Offset(x - 3f, -3f), androidx.compose.ui.geometry.Size(w + 6f, size.height + 6f), androidx.compose.ui.geometry.CornerRadius(8f))

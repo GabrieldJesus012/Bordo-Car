@@ -21,6 +21,14 @@ class Trip(val start: Long, val end: Long, val dist: Double, val moving: Long, v
  */
 object Drive {
     var speed by mutableStateOf(0.0)            // m/s
+    /** The top speed of the trip going on (km/h). */
+    var tripMax by mutableStateOf(0)
+    /** Rough g-forces from the GPS: forwards (+ speeding up, - braking) and sideways (+ turning right). */
+    var gLon by mutableStateOf(0f)
+    var gLat by mutableStateOf(0f)
+    private var gLastAt = 0L
+    private var gLastSp = 0.0
+    private var gLastHd: Double? = null
     /** When the last GPS fix came (to notice when the GPS stops). */
     @Volatile var lastFixAt = 0L
     var heading by mutableStateOf<Double?>(null)   // degrees, null until you've moved
@@ -60,7 +68,18 @@ object Drive {
         else lastHeadingPos?.let { a -> if (dist(a, p) > 15 && sp > 1.0) heading = bearing(a, p) }
         if (lastHeadingPos == null || dist(lastHeadingPos!!, p) > 15) lastHeadingPos = p
         pos = p
+        // g-forces: the change of speed, and speed × how fast the heading turns; smoothed, as the GPS gives one fix a second
+        val dt = (lastFixAt - gLastAt) / 1000.0
+        if (gLastAt > 0 && dt in 0.3..3.0) {
+            val lon = (sp - gLastSp) / dt / 9.81
+            val h0 = gLastHd; val h1 = heading
+            val lat = if (h0 != null && h1 != null && sp > 3.0) { var dh = h1 - h0; if (dh > 180) dh -= 360; if (dh < -180) dh += 360; sp * Math.toRadians(dh) / dt / 9.81 } else 0.0
+            gLon = (gLon * 0.5f + lon.toFloat().coerceIn(-1f, 1f) * 0.5f)
+            gLat = (gLat * 0.5f + lat.toFloat().coerceIn(-1f, 1f) * 0.5f)
+        }
+        gLastAt = lastFixAt; gLastSp = sp; gLastHd = heading
         track(p, sp)
+        if (tripOn) { val k = Math.round(sp * 3.6).toInt(); if (k > tripMax) tripMax = k }
     }
 
     private fun bearing(a: LL, b: LL): Double {
@@ -89,7 +108,7 @@ object Drive {
             if (sp > 1.0) tripMoveSec += 1
             if (now - tripSnapAt > 20_000L) snap(now)
         } else if (sp > 1.5) {
-            tripOn = true; tripT0 = now; tripDistance = 0.0; tripMoveSec = 0; tripLast = p; tripLastAt = now; tripFrom = p
+            tripOn = true; tripT0 = now; tripDistance = 0.0; tripMoveSec = 0; tripLast = p; tripLastAt = now; tripFrom = p; tripMax = 0
         }
         // the end of a trip: standing still for two minutes
         if (sp > 4.0) { drove = true; stillSince = 0L }
