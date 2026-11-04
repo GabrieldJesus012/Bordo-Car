@@ -146,7 +146,8 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
                 val blinkOn = (now / 500L) % 2L == 0L
                 BoxWithConstraints(Modifier.weight(0.3f).fillMaxHeight().padding(start = 12.dp)) {
                     val digits = "$kmh".length.coerceAtLeast(2)
-                    val big = minOf(maxHeight.value * 0.40f, maxWidth.value / (digits * 0.56f)).coerceIn(40f, 260f)
+                    val big = minOf(maxHeight.value * 0.40f, maxWidth.value * (if (lim != null) 0.8f else 0.95f) / (digits * 0.56f)).coerceIn(40f, 260f)
+                    val colH = maxHeight.value
                     Column(Modifier.fillMaxSize()) {
                         Text("VELOCIDADE", color = Grey, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
                         Text("$kmh", color = if (over) Color(0xFFFF5A4A) else Color.White, fontSize = big.sp, lineHeight = (big * 0.98f).sp, fontWeight = FontWeight.ExtraBold,
@@ -155,12 +156,12 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
                         Text(buildString { append("km/h"); if (mx > 0) append(" · MÁX $mx") }, color = Soft, fontSize = (big * 0.1f).coerceIn(14f, 22f).sp, maxLines = 1)
                         Spacer(Modifier.weight(1f))
                         val mins = if (preview) listOf(76, 88, 93, 108, 96, kmh) else Sport.minutes(now)
-                        Bars(mins, Modifier.fillMaxWidth().height((maxHeight.value * 0.3f).coerceIn(70f, 170f).dp).padding(bottom = 4.dp))
+                        Bars(mins, Modifier.fillMaxWidth().height((colH * 0.3f).coerceIn(70f, 170f).dp).padding(bottom = 4.dp))
                     }
-                    if (lim != null) Box(Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 4.dp).size((maxHeight.value * 0.11f).coerceIn(40f, 64f).dp)
-                        .clip(androidx.compose.foundation.shape.CircleShape).background(Color.White).border((maxHeight.value * 0.012f).coerceIn(4f, 7f).dp, Red, androidx.compose.foundation.shape.CircleShape),
+                    if (lim != null) Box(Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 4.dp).size((colH * 0.11f).coerceIn(40f, 64f).dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape).background(Color.White).border((colH * 0.012f).coerceIn(4f, 7f).dp, Red, androidx.compose.foundation.shape.CircleShape),
                         contentAlignment = Alignment.Center) {
-                        Text("$lim", color = Color(0xFF111111), fontSize = (maxHeight.value * 0.04f).coerceIn(15f, 24f).sp, fontWeight = FontWeight.ExtraBold)
+                        Text("$lim", color = Color(0xFF111111), fontSize = (colH * 0.04f).coerceIn(15f, 24f).sp, fontWeight = FontWeight.ExtraBold)
                     }
                 }
                 // the compass ring, with the next turn inside it
