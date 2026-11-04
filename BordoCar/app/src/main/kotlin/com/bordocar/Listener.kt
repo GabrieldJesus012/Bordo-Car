@@ -121,6 +121,20 @@ object NowPlaying {
         list.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING } ?: list.firstOrNull()
     } catch (e: Exception) { null }
 
+    /** The buttons on the car screen: "prev", "play" (play / pause) and "next". */
+    fun control(ctx: Context, what: String) {
+        try {
+            val c = controller(ctx) ?: return
+            val t = c.transportControls
+            when (what) {
+                "prev" -> t.skipToPrevious()
+                "next" -> t.skipToNext()
+                else -> if (c.playbackState?.state == PlaybackState.STATE_PLAYING) t.pause() else t.play()
+            }
+            refresh(ctx)
+        } catch (e: Exception) { }
+    }
+
     fun refresh(ctx: Context) {
         allowed = isAllowed(ctx)
         if (!allowed) return

@@ -49,6 +49,17 @@ object Themes {
     fun set(ctx: Context, p: Palette) { chosen = p; Prefs(ctx).put("theme", p.key) }
     fun next(ctx: Context) = set(ctx, all[(all.indexOfFirst { it.key == chosen.key } + 1) % all.size])
 
+    private var carArt: Bitmap? = null
+    private var carCol: Color = Color(0xFFD81B2A)
+    /** The main colour of the album cover, bright (for the Fórmula 1 car of the Música mode); red when there's no cover. */
+    fun coverAccent(art: Bitmap?): Color {
+        if (art == null) return Color(0xFFD81B2A)
+        if (art === carArt) return carCol
+        carArt = art
+        carCol = coverColour(art)?.let { if (it[1] < 0.2f) Color(0xFFB8C0CC) else hsv(it[0], it[1].coerceAtLeast(0.7f), 0.9f) } ?: Color(0xFFD81B2A)
+        return carCol
+    }
+
     private var lastArt: Bitmap? = null
     private var lastPal: Palette = cover
     private fun fromCover(art: Bitmap?): Palette {
