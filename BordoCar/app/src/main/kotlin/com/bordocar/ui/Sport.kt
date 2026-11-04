@@ -192,7 +192,6 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
                             }
                         }
                     }
-                    Music(Modifier.padding(top = 4.dp, bottom = 2.dp))
                 }
                 // the route, this trip and today side by side, the g-force
                 BoxWithConstraints(Modifier.weight(0.3f).fillMaxHeight().padding(end = 12.dp)) {
