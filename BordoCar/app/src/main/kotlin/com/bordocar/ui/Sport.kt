@@ -125,18 +125,13 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
             while (x < size.width) { drawLine(Color(0x0DFFFFFF), Offset(x, size.height), Offset(x + size.height, 0f), strokeWidth = 5f); x += step }
         }) {
         Column(Modifier.fillMaxSize().padding(start = padL, top = padT, end = padR, bottom = padB)) {
-            // the time, battery and weather (Android Auto's buttons sit at the right end)
-            Row(Modifier.fillMaxWidth().height(52.dp).padding(start = 12.dp, end = 170.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(java.text.SimpleDateFormat("HH:mm", BRL).format(java.util.Date(now)), color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
-                // the day and month next to the time: "ter, 3 de novembro"
-                Text(java.text.SimpleDateFormat("EEE, d 'de' MMMM", BRL).format(java.util.Date(now)).replace(".", ""), color = Soft, fontSize = 18.sp,
-                    maxLines = 1, modifier = Modifier.padding(start = 14.dp))
-                if (bat >= 0) Text((if (charging) "⚡ " else "🔋 ") + "$bat%", color = Soft, fontSize = 20.sp, modifier = Modifier.padding(start = 20.dp))
+            // the same bar with the time, the date, the battery and the weather as in the other modes, in the same place
+            Box(Modifier.fillMaxWidth().height(64.dp)) {
+                BottomBar(now, bat, charging, wx, city, Modifier.fillMaxSize())
                 if (preview) Text("PRÉVIA", color = Color(0xFF1A0A0A), fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(start = 20.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFFFFC24E)).padding(horizontal = 8.dp, vertical = 2.dp))
-                Spacer(Modifier.weight(1f))
-                if (wx != null) Text("${Weather.emoji(wx.code)} ${Math.round(wx.tempC)}°" + (if (city.isNotBlank()) " $city" else ""), color = Soft, fontSize = 20.sp, maxLines = 1)
+                    modifier = Modifier.align(Alignment.Center).clip(RoundedCornerShape(6.dp)).background(Color(0xFFFFC24E)).padding(horizontal = 8.dp, vertical = 2.dp))
             }
+            Spacer(Modifier.height(10.dp))
             // the lights stay as they are above the limit: it's the limit's circle that blinks
             Leds(kmh, false, true, Modifier.fillMaxWidth().height(20.dp).padding(horizontal = 12.dp))
             Row(Modifier.fillMaxWidth().weight(1f).padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
