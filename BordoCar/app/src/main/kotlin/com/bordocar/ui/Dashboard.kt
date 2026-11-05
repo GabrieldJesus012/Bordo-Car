@@ -519,9 +519,10 @@ private fun WeekCard(modifier: Modifier) {
 // ---------------------------------------------------------------- top bar: time, battery, weather
 
 @Composable
-private fun BottomBar(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: String, modifier: Modifier) {
+private fun BottomBar(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: String, modifier: Modifier, bg: Brush? = null) {
     val d = java.util.Date(now)
-    Card(modifier) {
+    val shape = RoundedCornerShape(22.dp)
+    Box(modifier.clip(shape).then(if (bg != null) Modifier.background(bg) else Modifier.background(CardBg)).border(1.dp, Edge, shape)) {
         Row(Modifier.fillMaxSize().padding(start = 22.dp, end = 170.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(java.text.SimpleDateFormat("HH:mm", BR).format(d), color = Txt, fontSize = 40.sp, fontWeight = FontWeight.ExtraBold)
             Column(Modifier.padding(start = 16.dp)) {
@@ -811,10 +812,14 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
     val doneS = cur?.second ?: todayS
     val a = arrival(now, navigating, left, doneM, doneS)
     val (dist, rest) = if (navigating) NavNotice.split(NavNotice.title, NavNotice.text) else (null to "")
-    Box(Modifier.fillMaxSize().background(Bg)) {
+    // the bar takes the colours of the sky of the hour (day, sunset, night), a little darker so the text reads well
+    val sky = skyAt(now, Drive.pos)
+    fun dark(c: Color, f: Float) = androidx.compose.ui.graphics.lerp(c, Color.Black, f)
+    Box(Modifier.fillMaxSize().background(dark(sky.colors[0], 0.45f))) {
         Column(Modifier.fillMaxSize().padding(start = padL, top = padT, end = padR, bottom = padB), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             // the bar stays on its own solid background; the sky and the road start under it
-            BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp))
+            BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp),
+                bg = Brush.horizontalGradient(listOf(dark(sky.colors[0], 0.25f), dark(sky.colors[1], 0.3f), dark(sky.colors[2], 0.35f))))
           Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(18.dp))
               .background(Brush.verticalGradient(listOf(Color(0xFF0D1A33), Color(0xFF1D3557), Color(0xFF141A24))))) {
             Highway(navigating, now, Modifier.fillMaxSize())
