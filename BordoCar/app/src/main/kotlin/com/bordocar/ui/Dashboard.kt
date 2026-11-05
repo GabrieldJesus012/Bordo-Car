@@ -817,7 +817,7 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
             BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp))
           Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(18.dp))
               .background(Brush.verticalGradient(listOf(Color(0xFF0D1A33), Color(0xFF1D3557), Color(0xFF141A24))))) {
-            Highway(navigating, Modifier.fillMaxSize())
+            Highway(navigating, now, Modifier.fillMaxSize())
           Column(Modifier.fillMaxSize().padding(top = 8.dp, start = 8.dp, end = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Timeline(now, navigating, a, doneM, dist, Modifier.fillMaxWidth().height(82.dp))
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 14.dp)) {
@@ -938,6 +938,33 @@ private fun RoadSign(navigating: Boolean, dist: String?, rest: String, wx: Weath
     }
 }
 
+private class Sky(val colors: List<Color>, val ground: List<Color>, val hills: Color, val stars: Float, val sun: Float)
+
+/** The sky for the hour, from the sunrise and sunset where you are (Teresina when the GPS hasn't answered yet). */
+private fun skyAt(now: Long, pos: LL?): Sky {
+    val lat = pos?.lat ?: -5.09; val lon = pos?.lon ?: -42.80
+    val c = java.util.Calendar.getInstance().apply { timeInMillis = now }
+    val tz = c.timeZone.getOffset(now) / 60_000.0
+    val g = 2 * Math.PI / 365.0 * (c.get(java.util.Calendar.DAY_OF_YEAR) - 1)
+    val eq = 229.18 * (0.000075 + 0.001868 * Math.cos(g) - 0.032077 * Math.sin(g) - 0.014615 * Math.cos(2 * g) - 0.040849 * Math.sin(2 * g))
+    val decl = 0.006918 - 0.399912 * Math.cos(g) + 0.070257 * Math.sin(g) - 0.006758 * Math.cos(2 * g) + 0.000907 * Math.sin(2 * g) - 0.002697 * Math.cos(3 * g) + 0.00148 * Math.sin(3 * g)
+    val la = Math.toRadians(lat)
+    val ha = Math.toDegrees(Math.acos((Math.cos(Math.toRadians(90.833)) / (Math.cos(la) * Math.cos(decl)) - Math.tan(la) * Math.tan(decl)).coerceIn(-1.0, 1.0)))
+    val rise = 720 - 4 * (lon + ha) - eq + tz
+    val set = 720 - 4 * (lon - ha) - eq + tz
+    val m = c.get(java.util.Calendar.HOUR_OF_DAY) * 60 + c.get(java.util.Calendar.MINUTE) + c.get(java.util.Calendar.SECOND) / 60.0
+    // how close to sunrise / sunset (1 at the moment itself, 0 from 45 minutes away)
+    val glow = maxOf(1 - Math.abs(m - rise) / 45.0, 1 - Math.abs(m - set) / 45.0).coerceIn(0.0, 1.0).toFloat()
+    val day = m > rise && m < set
+    val dayS = Sky(listOf(Color(0xFF1E5FC4), Color(0xFF4F95E6), Color(0xFFA8D4FF)), listOf(Color(0xFF3B4655), Color(0xFF1C222C)), Color(0xFF34506E), 0f, 0f)
+    val nightS = Sky(listOf(Color(0xFF03060E), Color(0xFF0A1428), Color(0xFF16264A)), listOf(Color(0xFF1E2633), Color(0xFF0E1218)), Color(0xFF0B1424), 1f, 0f)
+    val duskS = Sky(listOf(Color(0xFF1D2B57), Color(0xFFB0507A), Color(0xFFFF9A4D)), listOf(Color(0xFF33343F), Color(0xFF17181F)), Color(0xFF3A2440), 0.3f, 1f)
+    fun mix(a: Sky, b: Sky, f: Float) = Sky(a.colors.zip(b.colors) { x, y -> androidx.compose.ui.graphics.lerp(x, y, f) },
+        a.ground.zip(b.ground) { x, y -> androidx.compose.ui.graphics.lerp(x, y, f) }, androidx.compose.ui.graphics.lerp(a.hills, b.hills, f),
+        a.stars + (b.stars - a.stars) * f, a.sun + (b.sun - a.sun) * f)
+    return mix(if (day) dayS else nightS, duskS, glow)
+}
+
 /** Which manoeuvre the navigation notice speaks of (Portuguese / English), or null when it's not clear. */
 private fun maneuver(s0: String): String? {
     val s = s0.lowercase()
@@ -978,21 +1005,36 @@ private fun cardinalName(deg: Double) = listOf("Norte", "Nordeste", "Leste", "Su
 /** A real-looking highway: grey asphalt with its shoulders, white edge lines, the double yellow line in the middle, and the arrow of
  *  the next manoeuvre painted on it (yellow). */
 @Composable
-private fun Highway(navigating: Boolean, modifier: Modifier) {
+private fun Highway(navigating: Boolean, now: Long, modifier: Modifier) {
     val icon = if (navigating) NavNotice.icon else null
+    val sky = skyAt(now, Drive.pos)
     Canvas(modifier) {
         val w = size.width; val hh = size.height
         val cx = w / 2f
         val horizon = hh * 0.36f
-        fun half(y: Float, top: Float, bottom: Float) = top + (bottom - top) * ((y - horizon) / (hh - horizon)).coerceIn(0f, 1f)
-        // ground and the hills on the horizon
-        drawRect(Brush.verticalGradient(listOf(Color(0xFF2B3A4F), Color(0xFF141A24)), horizon, hh), Offset(0f, horizon), Size(w, hh - horizon))
+        // the sky of the hour: day, sunrise / sunset, night with stars
+        drawRect(Brush.verticalGradient(sky.colors, 0f, horizon), Offset.Zero, Size(w, horizon + 1f))
+        if (sky.stars > 0f) {
+            val rnd = java.util.Random(7L)
+            repeat(60) {
+                val x = rnd.nextFloat() * w; val y = rnd.nextFloat() * horizon * 0.95f; val r = 0.8f + rnd.nextFloat() * 1.6f
+                drawCircle(Color.White.copy(alpha = sky.stars * (0.35f + rnd.nextFloat() * 0.6f)), r, Offset(x, y))
+            }
+        }
+        if (sky.sun > 0f) {
+            // the sun sitting on the horizon
+            val sc = Offset(w * 0.72f, horizon)
+            drawCircle(Brush.radialGradient(listOf(Color(0xFFFFB25A).copy(alpha = 0.55f * sky.sun), Color.Transparent), sc, w * 0.16f), w * 0.16f, sc)
+            drawCircle(Color(0xFFFFC46B).copy(alpha = sky.sun), w * 0.035f, sc)
+        }
+        // ground and the hills on the horizon (a darker shade of the sky)
+        drawRect(Brush.verticalGradient(sky.ground, horizon, hh), Offset(0f, horizon), Size(w, hh - horizon))
         val hills = Path().apply {
             moveTo(0f, horizon); quadraticBezierTo(w * 0.12f, horizon - hh * 0.04f, w * 0.25f, horizon - hh * 0.015f)
             quadraticBezierTo(w * 0.4f, horizon - hh * 0.05f, w * 0.55f, horizon - hh * 0.02f); quadraticBezierTo(w * 0.75f, horizon - hh * 0.045f, w, horizon - hh * 0.01f)
             lineTo(w, horizon + 2f); lineTo(0f, horizon + 2f); close()
         }
-        drawPath(hills, Color(0xFF1B2A22))
+        drawPath(hills, sky.hills)
         // shoulders, asphalt
         val sTop = w * 0.03f; val sBot = w * 0.40f
         val aTop = w * 0.023f; val aBot = w * 0.34f
