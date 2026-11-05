@@ -519,7 +519,7 @@ private fun WeekCard(modifier: Modifier) {
 // ---------------------------------------------------------------- top bar: time, battery, weather
 
 @Composable
-internal fun BottomBar(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: String, modifier: Modifier) {
+private fun BottomBar(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: String, modifier: Modifier) {
     val d = java.util.Date(now)
     Card(modifier) {
         Row(Modifier.fillMaxSize().padding(start = 22.dp, end = 170.dp), verticalAlignment = Alignment.CenterVertically) {
