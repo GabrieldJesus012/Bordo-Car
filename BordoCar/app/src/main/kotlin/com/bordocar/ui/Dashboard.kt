@@ -811,10 +811,14 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
     val doneS = cur?.second ?: todayS
     val a = arrival(now, navigating, left, doneM, doneS)
     val (dist, rest) = if (navigating) NavNotice.split(NavNotice.title, NavNotice.text) else (null to "")
-    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF0D1A33), Color(0xFF1D3557), Color(0xFF141A24))))) {
-        Highway(navigating, Modifier.fillMaxSize())
+    Box(Modifier.fillMaxSize().background(Bg)) {
         Column(Modifier.fillMaxSize().padding(start = padL, top = padT, end = padR, bottom = padB), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            // the bar stays on its own solid background; the sky and the road start under it
             BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp))
+          Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(18.dp))
+              .background(Brush.verticalGradient(listOf(Color(0xFF0D1A33), Color(0xFF1D3557), Color(0xFF141A24))))) {
+            Highway(navigating, Modifier.fillMaxSize())
+          Column(Modifier.fillMaxSize().padding(top = 8.dp, start = 8.dp, end = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Timeline(now, navigating, a, doneM, dist, Modifier.fillMaxWidth().height(82.dp))
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 14.dp)) {
                 val h = maxHeight.value
@@ -847,6 +851,8 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
                     color = Color(0xFFC9D6F2), fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth(0.3f).padding(bottom = 6.dp))
             }
+          }
+          }
         }
     }
 }
