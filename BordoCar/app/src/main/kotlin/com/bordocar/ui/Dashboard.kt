@@ -77,6 +77,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bordocar.Drive
 import com.bordocar.LL
+import com.bordocar.dist
 import com.bordocar.Limits
 import com.bordocar.NavNotice
 import com.bordocar.NowPlaying
@@ -810,20 +811,19 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
             // arrival
             Card(Modifier.fillMaxWidth().height(76.dp)) {
                 Row(Modifier.fillMaxSize().padding(horizontal = 22.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (left != null && (left.eta != null || left.km != null || left.min != null)) {
-                        Column { Label("CHEGADA"); Text(left.eta ?: "–", color = Txt, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 34.sp) }
-                        val leftM = (left.km ?: 0.0) * 1000.0
-                        val f = if (leftM > 0) (doneM / (doneM + leftM)).toFloat().coerceIn(0f, 1f) else 0f
+                    val a = arrival(now, navigating, left, doneM, doneS)
+                    if (a != null) {
+                        Column { Label("CHEGADA"); Text(a.eta ?: "–", color = Txt, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 34.sp, maxLines = 1) }
                         Box(Modifier.weight(1f).padding(horizontal = 22.dp).height(12.dp).clip(RoundedCornerShape(6.dp)).background(Track)) {
-                            Box(Modifier.fillMaxHeight().fillMaxWidth(f).background(Brush.horizontalGradient(Blue)))
+                            Box(Modifier.fillMaxHeight().fillMaxWidth(a.progress).background(Brush.horizontalGradient(Blue)))
                         }
                         Column(horizontalAlignment = Alignment.End) {
                             Label("FALTAM")
-                            Text(listOfNotNull(left.km?.let { fmtKm(it) }, left.min?.let { fmtMin(it) }).joinToString(" · ").ifBlank { "–" },
-                                color = Txt, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 34.sp, maxLines = 1)
+                            Text(a.left.ifBlank { "–" }, color = Txt, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 34.sp, maxLines = 1)
                         }
                     } else {
-                        Text(if (navigating) "Chegada: o ${NavNotice.app} não mandou a hora de chegada" else "Sem rota · escolha o destino no Waze ou no Google Maps",
+                        Text(if (navigating) "${NavNotice.app.ifBlank { "O app" }} não informa a chegada · rota há ${fmtMin(((now - NavNotice.startedAt).coerceAtLeast(0L) / 60_000L).toInt())}"
+                            else "Sem rota · escolha o destino no Waze ou no Google Maps",
                             color = Sub, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
@@ -847,6 +847,49 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
             }
         }
     }
+}
+
+private class Arrival(val eta: String?, val left: String, val progress: Float)
+
+/**
+ * The arrival bar of Estrada. What's left comes from Waze / Google Maps when they say it ("Chegada: 16:26", "12 km", "21 min"); the
+ * minutes left are worked out from the arrival time when only that comes (Google Maps); and when the route was started from Bordo
+ * Car (Casa, Trabalho, a favourite), the distance to the destination as the crow flies fills in what's missing (Waze), marked "≈".
+ */
+private fun arrival(now: Long, navigating: Boolean, left: Remaining.Left?, doneM: Double, doneS: Long): Arrival? {
+    if (!navigating) return null
+    val fmt = java.text.SimpleDateFormat("HH:mm", BR)
+    var eta = left?.eta
+    var min = left?.min
+    var km = left?.km
+    var approx = false
+    if (min == null && eta != null) {
+        // minutes from now to the arrival time (it may be after midnight)
+        val p = eta.split(":"); val c = java.util.Calendar.getInstance()
+        val nowMin = c.get(java.util.Calendar.HOUR_OF_DAY) * 60 + c.get(java.util.Calendar.MINUTE)
+        val m = ((p[0].toInt() * 60 + p[1].toInt()) - nowMin + 1440) % 1440
+        if (m < 12 * 60) min = m
+    }
+    val tgt = NavNotice.target
+    val pos = Drive.pos
+    val fresh = tgt != null && NavNotice.targetAt > 0 && now - NavNotice.targetAt < 6 * 3600_000L
+    if (km == null && fresh && pos != null) { km = dist(pos, tgt!!) / 1000.0; approx = true }
+    if (eta == null && km != null) {
+        // no arrival time: what's left at the trip's average speed (30 km/h at the start)
+        val avg = if (doneS >= 120 && doneM > 500) (doneM / doneS * 3.6).coerceIn(15.0, 110.0) else 30.0
+        val m = Math.round(km * (if (approx) 1.3 else 1.0) / avg * 60.0).toInt()
+        if (min == null) min = m
+        eta = "≈ " + fmt.format(java.util.Date(now + m * 60_000L))
+    }
+    if (eta == null && min == null && km == null) return null
+    val progress = when {
+        left?.km != null -> { val lm = left.km * 1000.0; (doneM / (doneM + lm)).toFloat() }
+        approx && NavNotice.targetFromM > 0 -> (1.0 - km!! * 1000.0 / NavNotice.targetFromM).toFloat()
+        min != null && NavNotice.startedAt > 0 -> { val gone = (now - NavNotice.startedAt) / 60_000f; gone / (gone + min) }
+        else -> 0f
+    }.coerceIn(0f, 1f)
+    val parts = listOfNotNull(km?.let { (if (approx) "≈ " else "") + fmtKm(it) }, min?.let { fmtMin(it) })
+    return Arrival(eta, parts.joinToString(" · "), progress)
 }
 
 private fun fmtKm(v: Double) = (if (v < 100) String.format(BR, "%.1f", v).removeSuffix(",0") else "${Math.round(v)}") + " km"

@@ -55,7 +55,11 @@ class Listener : NotificationListenerService() {
         NavNotice.key = sbn.key
         NavNotice.removedAt = 0L
         NavNotice.app = app
-        NavNotice.title = title.ifBlank { text }; NavNotice.text = if (title.isBlank()) "" else text; NavNotice.sub = sub
+        if (!sameRoute) NavNotice.startedAt = System.currentTimeMillis()
+        // Waze puts the song playing (from Spotify) in that small line: that isn't about the route
+        val music = listOf(NowPlaying.artist, NowPlaying.title).filter { it.length >= 3 }
+        val subRoute = if (music.any { m -> sub.contains(m, ignoreCase = true) || m.contains(sub.trim(), ignoreCase = true) && sub.trim().length >= 3 }) "" else sub
+        NavNotice.title = title.ifBlank { text }; NavNotice.text = if (title.isBlank()) "" else text; NavNotice.sub = subRoute
         if (icon != null || !sameRoute) NavNotice.icon = icon
         NavNotice.at = System.currentTimeMillis()
     }
@@ -67,6 +71,12 @@ object NavNotice {
     var pkg = ""
     /** Which notice the route is in, and when it was taken down (0 = it's up). */
     var key = ""
+    /** When this route started (first notice of it). */
+    @Volatile var startedAt = 0L
+    /** Where the route goes, when it was started from Bordo Car (Casa, Trabalho, a favourite, a search), and how far it was then. */
+    @Volatile var target: LL? = null
+    @Volatile var targetFromM = 0.0
+    @Volatile var targetAt = 0L
     @Volatile var removedAt = 0L
     var app by mutableStateOf("")
     var title by mutableStateOf("")

@@ -61,6 +61,12 @@ class BordoCarService : CarAppService() {
 fun navigateTo(car: CarContext, q: String) {
     val ll = q.trim().replace(" ", "")
     val uri = if (Regex("^-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?$").matches(ll)) "geo:$ll?q=$ll" else "geo:0,0?q=" + Uri.encode(q.trim())
+    // remember the destination (when it's a point) to show how much is left even when the app doesn't say it (Waze)
+    Regex("^(-?\\d+(?:\\.\\d+)?),(-?\\d+(?:\\.\\d+)?)$").find(ll)?.let { m ->
+        val t = com.bordocar.LL(m.groupValues[1].toDouble(), m.groupValues[2].toDouble())
+        com.bordocar.NavNotice.target = t; com.bordocar.NavNotice.targetAt = System.currentTimeMillis()
+        com.bordocar.NavNotice.targetFromM = com.bordocar.Drive.pos?.let { com.bordocar.dist(it, t) } ?: 0.0
+    } ?: run { com.bordocar.NavNotice.target = null }
     val pm = car.packageManager
     fun has(p: String) = try { pm.getPackageInfo(p, 0); true } catch (e: Exception) { false }
     val choice = Prefs(car).s("navapp", "waze")
