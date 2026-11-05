@@ -72,6 +72,16 @@ fun navigateTo(car: CarContext, q: String) {
     val choice = Prefs(car).s("navapp", "waze")
     val order = (if (choice == "maps") listOf("com.google.android.apps.maps", "com.waze") else listOf("com.waze", "com.google.android.apps.maps")).filter { has(it) }
     val name = mapOf("com.waze" to "Waze", "com.google.android.apps.maps" to "Google Maps")
+    // 1st: start the route in Waze / Google Maps on the phone (they then take over the car screen). Android Auto alone hands
+    // "navigate to" to its default navigation app, which can be Bordo Car itself, so nothing happened.
+    for (pkg in order) {
+        if (openOnPhone(car.applicationContext, pkg, ll, q.trim())) {
+            navNote = "abriu no ${name[pkg]} pelo celular"
+            try { CarToast.makeText(car, "Abrindo no ${name[pkg]}…", CarToast.LENGTH_SHORT).show() } catch (x: Exception) { }
+            try { car.startCarApp(Intent(CarContext.ACTION_NAVIGATE, Uri.parse(uri)).setPackage(pkg)) } catch (e: Exception) { }
+            return
+        }
+    }
     for (pkg in order) {
         try {
             car.startCarApp(Intent(CarContext.ACTION_NAVIGATE, Uri.parse(uri)).setPackage(pkg))
@@ -87,11 +97,37 @@ fun navigateTo(car: CarContext, q: String) {
     }
 }
 
+/**
+ * Opens the route in Waze / Google Maps on the phone. Android only lets an app open another one from the background while it shows
+ * something over the other apps, so this needs "Sobrepor a outros apps" (asked on the phone) and puts up a 1-pixel window for a moment.
+ */
+private fun openOnPhone(ctx: android.content.Context, pkg: String, ll: String, q: String): Boolean {
+    if (!android.provider.Settings.canDrawOverlays(ctx)) { navNote = "falta a permissão \"Sobrepor a outros apps\" no celular"; return false }
+    val point = Regex("^-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?$").matches(ll)
+    val link = if (pkg == "com.waze") (if (point) "https://waze.com/ul?ll=$ll&navigate=yes" else "https://waze.com/ul?q=${Uri.encode(q)}&navigate=yes")
+               else "google.navigation:q=" + (if (point) ll else Uri.encode(q))
+    val wm = ctx.getSystemService(android.view.WindowManager::class.java)
+    val dot = android.view.View(ctx)
+    val lp = android.view.WindowManager.LayoutParams(1, 1, android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+        android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE, android.graphics.PixelFormat.TRANSLUCENT)
+    val shown = try { wm.addView(dot, lp); true } catch (e: Exception) { false }
+    val ok = try {
+        ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link)).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true
+    } catch (e: Exception) { navNote = "o celular não abriu: ${e.javaClass.simpleName}"; false }
+    if (shown) android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ try { wm.removeView(dot) } catch (e: Exception) { } }, 2000L)
+    return ok
+}
+
 /** What happened the last time a destination was handed over (shown on the phone, to check). */
 @Volatile var navNote = ""
 
 class BordoSession : Session() {
     private lateinit var surface: DashSurface
+
+    // Android Auto gave a "navigate to" back to Bordo Car (it was its default navigation app): note it, to check on the phone
+    override fun onNewIntent(intent: Intent) {
+        if (intent.action == CarContext.ACTION_NAVIGATE) navNote = "$navNote · o Android Auto devolveu o destino para o Bordo"
+    }
 
     override fun onCreateScreen(intent: Intent): Screen {
         val app = carContext.applicationContext

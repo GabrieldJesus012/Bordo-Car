@@ -230,6 +230,10 @@ class MainActivity : ComponentActivity() {
                         requestPermissions(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION), 3)
                     }
                 }
+                val over = android.provider.Settings.canDrawOverlays(this@MainActivity)
+                Item("Sobrepor a outros apps", "Para Casa, Trabalho, Favoritos, Postos e Buscar conseguirem abrir o Waze ou o Google Maps", over, "Permitir") {
+                    try { startActivity(Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))) } catch (e: Exception) { }
+                }
                 if (!notif) Item("Notificações", "O aviso discreto enquanto conta os km no carro", false, "Permitir") {
                     if (Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 2)
                 }
