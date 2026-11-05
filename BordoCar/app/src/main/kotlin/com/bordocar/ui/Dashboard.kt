@@ -719,6 +719,7 @@ private fun RoadAndCar(modifier: Modifier, top: Dp = 0.dp) {
     LaunchedEffect(Unit) { while (true) { blink.animateTo(0.35f, androidx.compose.animation.core.tween(500)); blink.animateTo(1f, androidx.compose.animation.core.tween(500)) } }
     Canvas(modifier) {
         val w = size.width; val h = size.height
+        val topPx = top.toPx()
         val cx = w / 2f
         val horizon = h * 0.1f
         // where each edge of the track is at height y (perspective: wide at the bottom, narrow at the horizon)
@@ -752,7 +753,6 @@ private fun RoadAndCar(modifier: Modifier, top: Dp = 0.dp) {
 
         // the car (drawn on a 300 × 190 grid, centred)
         val s = minOf(w / 520f, (h - topPx) / 300f)
-        val topPx = top.toPx()
         val cy = topPx + (h - topPx) * 0.5f
         fun X(x: Float) = cx + x * s
         fun Y(y: Float) = cy + y * s
