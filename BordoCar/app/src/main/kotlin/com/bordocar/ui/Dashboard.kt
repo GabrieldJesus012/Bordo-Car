@@ -519,12 +519,12 @@ private fun WeekCard(modifier: Modifier) {
 // ---------------------------------------------------------------- top bar: time, battery, weather
 
 @Composable
-private fun BottomBar(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: String, modifier: Modifier, bg: Brush? = null, plain: Boolean = false) {
+private fun BottomBar(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: String, modifier: Modifier, bg: Brush? = null, plain: Boolean = false, endPad: Dp = 170.dp) {
     val d = java.util.Date(now)
     val shape = RoundedCornerShape(22.dp)
     // plain: no box, the text straight over the picture (Estrada, Música), like the sporty one
     Box(if (plain) modifier else modifier.clip(shape).then(if (bg != null) Modifier.background(bg) else Modifier.background(CardBg)).border(1.dp, Edge, shape)) {
-        Row(Modifier.fillMaxSize().padding(start = 22.dp, end = 170.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxSize().padding(start = 22.dp, end = endPad), verticalAlignment = Alignment.CenterVertically) {
             Text(java.text.SimpleDateFormat("HH:mm", BR).format(d), color = Txt, fontSize = 40.sp, fontWeight = FontWeight.ExtraBold)
             Column(Modifier.padding(start = 16.dp)) {
                 Text(java.text.SimpleDateFormat("EEEE", BR).format(d).replaceFirstChar { it.uppercase() }, color = Sub, fontSize = 15.sp)
@@ -563,7 +563,8 @@ private fun MusicDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, 
         // the track and the car over the whole screen, behind everything (the car stays in the middle of the part under the bar)
         RoadAndCar(Modifier.fillMaxSize(), top = padT + 74.dp)
         Column(Modifier.fillMaxSize().padding(start = padL, top = padT, end = padR, bottom = padB), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp), plain = true)
+            // the weather all the way to the right (Android Auto's buttons cover it only while they show)
+            BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp), plain = true, endPad = 22.dp)
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
                 val dial = minOf(maxHeight * 0.92f, maxWidth * 0.3f)
                 GaugeSpeed(wx, Modifier.size(dial).align(Alignment.CenterStart).padding(start = 6.dp))
