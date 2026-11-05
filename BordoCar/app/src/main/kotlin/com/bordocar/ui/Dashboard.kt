@@ -519,10 +519,11 @@ private fun WeekCard(modifier: Modifier) {
 // ---------------------------------------------------------------- top bar: time, battery, weather
 
 @Composable
-private fun BottomBar(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: String, modifier: Modifier, bg: Brush? = null) {
+private fun BottomBar(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: String, modifier: Modifier, bg: Brush? = null, plain: Boolean = false) {
     val d = java.util.Date(now)
     val shape = RoundedCornerShape(22.dp)
-    Box(modifier.clip(shape).then(if (bg != null) Modifier.background(bg) else Modifier.background(CardBg)).border(1.dp, Edge, shape)) {
+    // plain: no box, the text straight over the picture (Estrada, Música), like the sporty one
+    Box(if (plain) modifier else modifier.clip(shape).then(if (bg != null) Modifier.background(bg) else Modifier.background(CardBg)).border(1.dp, Edge, shape)) {
         Row(Modifier.fillMaxSize().padding(start = 22.dp, end = 170.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(java.text.SimpleDateFormat("HH:mm", BR).format(d), color = Txt, fontSize = 40.sp, fontWeight = FontWeight.ExtraBold)
             Column(Modifier.padding(start = 16.dp)) {
@@ -559,12 +560,12 @@ private fun BottomBar(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, 
 @Composable
 private fun MusicDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: String, padL: Dp, padT: Dp, padR: Dp, padB: Dp) {
     Box(Modifier.fillMaxSize().background(Bg)) {
+        // the track and the car over the whole screen, behind everything (the car stays in the middle of the part under the bar)
+        RoadAndCar(Modifier.fillMaxSize(), top = padT + 74.dp)
         Column(Modifier.fillMaxSize().padding(start = padL, top = padT, end = padR, bottom = padB), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp))
+            BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp), plain = true)
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
                 val dial = minOf(maxHeight * 0.92f, maxWidth * 0.3f)
-                // the road and the car, behind everything
-                RoadAndCar(Modifier.fillMaxSize())
                 GaugeSpeed(wx, Modifier.size(dial).align(Alignment.CenterStart).padding(start = 6.dp))
                 Vinyl(now, Modifier.size(dial).align(Alignment.CenterEnd).padding(end = 6.dp))
                 if (NavNotice.active(now)) TurnChip(Modifier.align(Alignment.TopCenter).padding(top = 2.dp).fillMaxWidth(0.36f))
@@ -711,7 +712,7 @@ private fun Vinyl(now: Long, modifier: Modifier) {
 
 /** A Fórmula 1 car seen from behind, in the colour of the album cover, on a track with red and white kerbs. */
 @Composable
-private fun RoadAndCar(modifier: Modifier) {
+private fun RoadAndCar(modifier: Modifier, top: Dp = 0.dp) {
     val accent = Blue.last()
     val carCol = Themes.coverAccent(NowPlaying.art)
     val blink = remember { androidx.compose.animation.core.Animatable(1f) }
@@ -750,8 +751,9 @@ private fun RoadAndCar(modifier: Modifier) {
         drawLine(accent.copy(alpha = 0.7f), Offset(cx, h), Offset(cx, horizon), strokeWidth = 3f, pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(22f, 18f)))
 
         // the car (drawn on a 300 × 190 grid, centred)
-        val s = minOf(w / 520f, h / 300f)
-        val cy = h * 0.5f
+        val s = minOf(w / 520f, (h - topPx) / 300f)
+        val topPx = top.toPx()
+        val cy = topPx + (h - topPx) * 0.5f
         fun X(x: Float) = cx + x * s
         fun Y(y: Float) = cy + y * s
         fun rect(x: Float, y: Float, ww: Float, hh: Float, c: Color, rad: Float = 0f) = drawRoundRect(c, Offset(X(x), Y(y)), Size(ww * s, hh * s), CornerRadius(rad * s))
@@ -815,15 +817,14 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
     // the bar takes the colours of the sky of the hour (day, sunset, night), a little darker so the text reads well
     val sky = skyAt(now, Drive.pos)
     fun dark(c: Color, f: Float) = androidx.compose.ui.graphics.lerp(c, Color.Black, f)
-    Box(Modifier.fillMaxSize().background(dark(sky.colors[0], 0.45f))) {
+    Box(Modifier.fillMaxSize().background(dark(sky.colors[0], 0.2f))) {
+        // the sky and the road over the whole screen; the bar's text floats over the sky (with a light shade so it reads well)
+        Highway(navigating, now, Modifier.fillMaxSize())
+        Box(Modifier.fillMaxWidth().height(padT + 90.dp).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.35f), Color.Transparent))))
         Column(Modifier.fillMaxSize().padding(start = padL, top = padT, end = padR, bottom = padB), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            // the bar stays on its own solid background; the sky and the road start under it
-            BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp),
-                bg = Brush.horizontalGradient(listOf(dark(sky.colors[0], 0.25f), dark(sky.colors[1], 0.3f), dark(sky.colors[2], 0.35f))))
-          Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(18.dp))
-              .background(Brush.verticalGradient(listOf(Color(0xFF0D1A33), Color(0xFF1D3557), Color(0xFF141A24))))) {
-            Highway(navigating, now, Modifier.fillMaxSize())
-          Column(Modifier.fillMaxSize().padding(top = 8.dp, start = 8.dp, end = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp), plain = true)
+          Box(Modifier.fillMaxWidth().weight(1f)) {
+          Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Timeline(now, navigating, a, doneM, dist, Modifier.fillMaxWidth().height(82.dp))
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 14.dp)) {
                 val h = maxHeight.value
@@ -866,7 +867,7 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
 @Composable
 private fun Timeline(now: Long, navigating: Boolean, a: Arrival?, doneM: Double, dist: String?, modifier: Modifier) {
     val fmt = java.text.SimpleDateFormat("HH:mm", BR)
-    Box(modifier.clip(RoundedCornerShape(16.dp)).background(Color(0xE60B1222)).border(1.dp, Edge, RoundedCornerShape(16.dp)).padding(horizontal = 22.dp, vertical = 8.dp)) {
+    Box(modifier.clip(RoundedCornerShape(16.dp)).background(Color(0x990B1222)).border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(16.dp)).padding(horizontal = 22.dp, vertical = 8.dp)) {
         if (a == null) {
             Text(if (navigating) "${NavNotice.app.ifBlank { "O app" }} não informa a chegada · rota há ${fmtMin(((now - NavNotice.startedAt).coerceAtLeast(0L) / 60_000L).toInt())}"
                 else "Sem rota · escolha o destino no Waze ou no Google Maps", color = Sub, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -1016,7 +1017,7 @@ private fun Highway(navigating: Boolean, now: Long, modifier: Modifier) {
     Canvas(modifier) {
         val w = size.width; val hh = size.height
         val cx = w / 2f
-        val horizon = hh * 0.36f
+        val horizon = hh * 0.44f
         // the sky of the hour: day, sunrise / sunset, night with stars
         drawRect(Brush.verticalGradient(sky.colors, 0f, horizon), Offset.Zero, Size(w, horizon + 1f))
         if (sky.stars > 0f) {
