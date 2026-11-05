@@ -932,6 +932,41 @@ private fun RoadSign(navigating: Boolean, dist: String?, rest: String, wx: Weath
     }
 }
 
+/** Which manoeuvre the navigation notice speaks of (Portuguese / English), or null when it's not clear. */
+private fun maneuver(s0: String): String? {
+    val s = s0.lowercase()
+    return when {
+        "retorno" in s || "u-turn" in s || "make a u" in s -> "retorno"
+        "rotatória" in s || "rotatoria" in s || "rotunda" in s || "roundabout" in s -> "rotatoria"
+        ("leve" in s || "mantenha" in s || "slight" in s || "keep" in s) && ("direita" in s || "right" in s) -> "leve-direita"
+        ("leve" in s || "mantenha" in s || "slight" in s || "keep" in s) && ("esquerda" in s || "left" in s) -> "leve-esquerda"
+        "direita" in s || "right" in s -> "direita"
+        "esquerda" in s || "left" in s -> "esquerda"
+        "siga" in s || "continue" in s || "em frente" in s || "straight" in s || "head" in s -> "frente"
+        else -> null
+    }
+}
+
+/** The arrows painted on the road, as points on the road (0..1 across, 0..1 from far to near). */
+private fun arrowShape(kind: String): List<Pair<Float, Float>> {
+    val right = listOf(0.32f to 1f, 0.32f to 0.45f, 0.335f to 0.36f, 0.38f to 0.29f, 0.45f to 0.255f, 0.52f to 0.25f, 0.64f to 0.25f, 0.64f to 0.06f,
+        0.96f to 0.34f, 0.64f to 0.62f, 0.64f to 0.43f, 0.54f to 0.43f, 0.51f to 0.445f, 0.50f to 0.48f, 0.50f to 1f)
+    val straight = listOf(0.42f to 1f, 0.42f to 0.38f, 0.26f to 0.38f, 0.5f to 0.04f, 0.74f to 0.38f, 0.58f to 0.38f, 0.58f to 1f)
+    val slight = listOf(0.41f to 1f, 0.41f to 0.6f, 0.43f to 0.5f, 0.55f to 0.32f, 0.47f to 0.26f, 0.82f to 0.08f, 0.76f to 0.47f, 0.68f to 0.40f, 0.58f to 0.56f, 0.57f to 0.62f, 0.57f to 1f)
+    val uturn = listOf(0.74f to 1f, 0.74f to 0.40f, 0.72f to 0.27f, 0.66f to 0.17f, 0.58f to 0.11f, 0.5f to 0.09f, 0.42f to 0.11f, 0.34f to 0.17f, 0.28f to 0.27f, 0.26f to 0.40f,
+        0.26f to 0.60f, 0.14f to 0.60f, 0.34f to 0.92f, 0.54f to 0.60f, 0.42f to 0.60f, 0.42f to 0.40f, 0.44f to 0.31f, 0.47f to 0.27f, 0.5f to 0.26f,
+        0.53f to 0.27f, 0.56f to 0.31f, 0.58f to 0.40f, 0.58f to 1f)
+    fun mirror(l: List<Pair<Float, Float>>) = l.map { (u, v) -> (1f - u) to v }.reversed()
+    return when (kind) {
+        "direita" -> right
+        "esquerda" -> mirror(right)
+        "leve-direita" -> slight
+        "leve-esquerda" -> mirror(slight)
+        "retorno" -> uturn
+        else -> straight
+    }
+}
+
 private fun cardinalName(deg: Double) = listOf("Norte", "Nordeste", "Leste", "Sudeste", "Sul", "Sudoeste", "Oeste", "Noroeste")[(((deg % 360) + 360) % 360 / 45.0 + 0.5).toInt() % 8]
 
 /** A real-looking highway: grey asphalt with its shoulders, white edge lines, the double yellow line in the middle, and the arrow of
@@ -962,21 +997,29 @@ private fun Highway(navigating: Boolean, modifier: Modifier) {
         for (sg in listOf(-1f, 1f)) drawLine(Color(0xFFE8E8E8), Offset(cx + sg * aTop * 0.92f, horizon), Offset(cx + sg * aBot * 0.92f, hh), strokeWidth = 4f)
         // the double yellow line
         for (sg in listOf(-1f, 1f)) drawLine(Color(0xFFF2C230), Offset(cx + sg * 2f, horizon), Offset(cx + sg * w * 0.011f, hh), strokeWidth = 4f)
-        // the arrow on the asphalt (the app's own arrow, squashed as if lying on the road)
+        // the arrow painted on the asphalt: drawn by Bordo Car for the manoeuvre the app's notice speaks of, in perspective
         if (navigating) {
-            val aw = w * 0.13f; val ah = aw * 0.8f
-            val top = hh * 0.66f
-            if (icon != null) {
-                val img = icon.asImageBitmap()
+            val kind = maneuver(NavNotice.title + " " + NavNotice.text)
+            val v0 = hh * 0.58f; val vh = hh * 0.38f
+            val topW = w * 0.15f; val botW = w * 0.24f
+            fun pt(u: Float, v: Float) = Offset(cx + (u - 0.5f) * (topW + (botW - topW) * v), v0 + v * vh)
+            val yellow = Color(0xFFFFC24E)
+            if ((kind == null || kind == "rotatoria") && icon != null) {
+                // a manoeuvre Bordo Car doesn't know, or a roundabout (the app's icon shows which exit): the app's own arrow, squashed as if lying on the road
+                val img = icon.asImageBitmap(); val aw = w * 0.16f; val ah = aw * 0.75f
                 drawImage(img, srcOffset = androidx.compose.ui.unit.IntOffset.Zero, srcSize = androidx.compose.ui.unit.IntSize(img.width, img.height),
-                    dstOffset = androidx.compose.ui.unit.IntOffset((cx - aw / 2f).toInt(), top.toInt()), dstSize = androidx.compose.ui.unit.IntSize(aw.toInt(), ah.toInt()),
-                    alpha = 0.95f, colorFilter = ColorFilter.tint(Color(0xFFFFC24E)))
+                    dstOffset = androidx.compose.ui.unit.IntOffset((cx - aw / 2f).toInt(), (v0 + vh * 0.2f).toInt()), dstSize = androidx.compose.ui.unit.IntSize(aw.toInt(), ah.toInt()),
+                    alpha = 0.95f, colorFilter = ColorFilter.tint(yellow))
             } else {
-                val p = Path().apply {
-                    moveTo(cx - aw * 0.12f, top + ah); lineTo(cx - aw * 0.12f, top + ah * 0.35f); lineTo(cx - aw * 0.32f, top + ah * 0.35f)
-                    lineTo(cx, top); lineTo(cx + aw * 0.32f, top + ah * 0.35f); lineTo(cx + aw * 0.12f, top + ah * 0.35f); lineTo(cx + aw * 0.12f, top + ah); close()
+                val shape = arrowShape(kind ?: "frente")
+                val path = Path().apply { shape.forEachIndexed { i, (u, v) -> val o = pt(u, v); if (i == 0) moveTo(o.x, o.y) else lineTo(o.x, o.y) }; close() }
+                drawPath(path, Color.Black.copy(alpha = 0.25f), style = Stroke(6f))
+                drawPath(path, yellow.copy(alpha = 0.95f))
+                if (kind == "rotatoria") {
+                    // the roundabout's ring
+                    val c = pt(0.5f, 0.42f); val rw = (topW + (botW - topW) * 0.42f) * 0.26f
+                    drawOval(yellow.copy(alpha = 0.95f), Offset(c.x - rw, c.y - rw * 0.55f), Size(rw * 2, rw * 1.1f), style = Stroke(w * 0.012f))
                 }
-                drawPath(p, Color(0xFFFFC24E).copy(alpha = 0.95f))
             }
         }
     }
