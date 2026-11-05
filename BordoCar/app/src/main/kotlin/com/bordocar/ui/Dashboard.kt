@@ -21,11 +21,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.North
+import androidx.compose.material.icons.rounded.SportsScore
+import androidx.compose.material.icons.rounded.DirectionsCar
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -805,51 +809,180 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
     val (todayM, todayS) = Drive.today()
     val doneM = cur?.first ?: todayM
     val doneS = cur?.second ?: todayS
-    Box(Modifier.fillMaxSize().background(Bg)) {
+    val a = arrival(now, navigating, left, doneM, doneS)
+    val (dist, rest) = if (navigating) NavNotice.split(NavNotice.title, NavNotice.text) else (null to "")
+    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF0D1A33), Color(0xFF1D3557), Color(0xFF141A24))))) {
+        Highway(navigating, Modifier.fillMaxSize())
         Column(Modifier.fillMaxSize().padding(start = padL, top = padT, end = padR, bottom = padB), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp))
-            // arrival
-            Card(Modifier.fillMaxWidth().height(76.dp)) {
-                Row(Modifier.fillMaxSize().padding(horizontal = 22.dp), verticalAlignment = Alignment.CenterVertically) {
-                    val a = arrival(now, navigating, left, doneM, doneS)
-                    if (a != null) {
-                        Column { Label("CHEGADA"); Text(a.eta ?: "–", color = Txt, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 34.sp, maxLines = 1) }
-                        Box(Modifier.weight(1f).padding(horizontal = 22.dp).height(12.dp).clip(RoundedCornerShape(6.dp)).background(Track)) {
-                            Box(Modifier.fillMaxHeight().fillMaxWidth(a.progress).background(Brush.horizontalGradient(Blue)))
-                        }
-                        Column(horizontalAlignment = Alignment.End) {
-                            Label("FALTAM")
-                            Text(a.left.ifBlank { "–" }, color = Txt, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 34.sp, maxLines = 1)
-                        }
-                    } else {
-                        Text(if (navigating) "${NavNotice.app.ifBlank { "O app" }} não informa a chegada · rota há ${fmtMin(((now - NavNotice.startedAt).coerceAtLeast(0L) / 60_000L).toInt())}"
-                            else "Sem rota · escolha o destino no Waze ou no Google Maps",
-                            color = Sub, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
+            Timeline(now, navigating, a, doneM, dist, Modifier.fillMaxWidth().height(82.dp))
+            BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 14.dp)) {
+                val h = maxHeight.value
+                val big = (h * 0.3f).coerceIn(36f, 110f)
+                val kmh = Math.round((Drive.speed * 3.6).coerceAtLeast(0.0)).toInt()
+                val avg = if (doneS >= 60) Math.round(doneM / 1000.0 / (doneS / 3600.0)).toInt() else null
+                // speed
+                Column(Modifier.align(Alignment.TopStart).padding(top = 6.dp)) {
+                    Label("VELOCIDADE")
+                    Text("$kmh", color = Color.White, fontSize = big.sp, lineHeight = (big * 1.02f).sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                    Text("km/h" + (if (avg != null) " · média $avg" else ""), color = Color(0xFFC9D6F2), fontSize = (big * 0.18f).coerceIn(14f, 22f).sp)
                 }
-            }
-            Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (navigating) TurnCard(Modifier.weight(0.46f).fillMaxHeight(), music = true) else MediaCard(Modifier.weight(0.46f).fillMaxHeight())
-                Column(Modifier.weight(0.54f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    val kmh = Math.round((Drive.speed * 3.6).coerceAtLeast(0.0)).toInt()
-                    val avg = if (doneS >= 60) Math.round(doneM / 1000.0 / (doneS / 3600.0)).toInt() else null
+                // arrival, driving time
+                Column(Modifier.align(Alignment.TopEnd).padding(top = 6.dp), horizontalAlignment = Alignment.End) {
                     val mins = (doneS / 60L).toInt()
-                    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Stat("VELOCIDADE", "$kmh", "km/h", null, Modifier.weight(1f).fillMaxHeight())
-                        Stat("MÉDIA DA VIAGEM", avg?.toString() ?: "–", if (avg != null) "km/h" else "", null, Modifier.weight(1f).fillMaxHeight())
+                    if (a?.eta != null) {
+                        Label("CHEGADA")
+                        Text(a.eta, color = Color.White, fontSize = (big * 0.78f).sp, lineHeight = (big * 0.82f).sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                        val m = Regex("(\\d+h \\d+|\\d+ min)").find(a.left)?.value
+                        if (m != null) Text("em $m", color = Color(0xFFC9D6F2), fontSize = (big * 0.18f).coerceIn(14f, 22f).sp)
                     }
-                    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        val km = doneM / 1000.0
-                        Stat(if (cur != null) "RODADO NA VIAGEM" else "RODADO HOJE", if (km < 100) String.format(BR, "%.1f", km) else "${Math.round(km)}", "km", null, Modifier.weight(1f).fillMaxHeight())
-                        Stat("DIRIGINDO HÁ", fmtMin(mins), "", if (mins >= 120) "☕ hora de uma pausa?" else null, Modifier.weight(1f).fillMaxHeight())
-                    }
+                    Text("DIRIGINDO HÁ", color = Lbl, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp, modifier = Modifier.padding(top = 14.dp))
+                    Text(fmtMin(mins), color = Color.White, fontSize = (big * 0.36f).coerceIn(20f, 40f).sp, fontWeight = FontWeight.ExtraBold)
+                    if (mins >= 120) Text("☕ hora de uma pausa?", color = Color(0xFFFFC24E), fontSize = 15.sp)
                 }
+                // the green sign over the road
+                RoadSign(navigating, dist, rest, wx, city, Modifier.align(Alignment.TopCenter).fillMaxWidth(0.36f), h)
+                // the song, small
+                if (NowPlaying.title.isNotBlank()) Text("♪ " + NowPlaying.title + (if (NowPlaying.artist.isNotBlank()) " — " + NowPlaying.artist else ""),
+                    color = Color(0xFFC9D6F2), fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth(0.3f).padding(bottom = 6.dp))
             }
         }
     }
 }
 
-private class Arrival(val eta: String?, val left: String, val progress: Float)
+/** The trip as a line: where it started, the car where you are, the next turn, the chequered flag at the end. */
+@Composable
+private fun Timeline(now: Long, navigating: Boolean, a: Arrival?, doneM: Double, dist: String?, modifier: Modifier) {
+    val fmt = java.text.SimpleDateFormat("HH:mm", BR)
+    Box(modifier.clip(RoundedCornerShape(16.dp)).background(Color(0xE60B1222)).border(1.dp, Edge, RoundedCornerShape(16.dp)).padding(horizontal = 22.dp, vertical = 8.dp)) {
+        if (a == null) {
+            Text(if (navigating) "${NavNotice.app.ifBlank { "O app" }} não informa a chegada · rota há ${fmtMin(((now - NavNotice.startedAt).coerceAtLeast(0L) / 60_000L).toInt())}"
+                else "Sem rota · escolha o destino no Waze ou no Google Maps", color = Sub, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.align(Alignment.CenterStart))
+            return@Box
+        }
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
+            Row(Modifier.fillMaxWidth()) {
+                val start = if (NavNotice.startedAt > 0) "SAÍDA " + fmt.format(java.util.Date(NavNotice.startedAt)) else ""
+                Text(listOf(start, "rodado " + fmtKm(doneM / 1000.0)).filter { it.isNotBlank() }.joinToString(" · "), color = Lbl, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp, maxLines = 1)
+                Spacer(Modifier.weight(1f))
+                Text(listOf(if (a.left.isNotBlank()) "faltam ${a.left}" else "", if (a.eta != null) "CHEGADA ${a.eta}" else "").filter { it.isNotBlank() }.joinToString(" · "),
+                    color = Lbl, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp, maxLines = 1)
+            }
+            BoxWithConstraints(Modifier.fillMaxWidth().height(36.dp)) {
+                val w = maxWidth
+                val p = a.progress
+                Box(Modifier.align(Alignment.CenterStart).padding(end = 34.dp).fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(Track))
+                Box(Modifier.align(Alignment.CenterStart).width((w - 34.dp) * p).height(8.dp).clip(RoundedCornerShape(4.dp)).background(Brush.horizontalGradient(Blue)))
+                Box(Modifier.align(Alignment.CenterStart).size(18.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Blue.last()))
+                // the next turn, when how much is left of the route is known
+                val tm = dist?.let { turnMetres(it) }
+                if (tm != null && a.km != null && a.km > 0.05) {
+                    val total = doneM + a.km * 1000.0
+                    val q = ((doneM + tm) / total).toFloat().coerceIn(p, 1f)
+                    Box(Modifier.align(Alignment.CenterStart).offset(x = (w - 34.dp) * q).width(4.dp).height(26.dp).background(Color(0xFFFFC24E)))
+                }
+                Icon(Icons.Rounded.DirectionsCar, null, tint = Color(0xFFFF4A3A), modifier = Modifier.align(Alignment.CenterStart).offset(x = ((w - 34.dp) * p - 14.dp).coerceAtLeast(0.dp)).size(30.dp))
+                Icon(Icons.Rounded.SportsScore, null, tint = Color.White, modifier = Modifier.align(Alignment.CenterEnd).size(30.dp))
+            }
+        }
+    }
+}
+
+private fun turnMetres(s: String): Double? {
+    val m = Regex("(\\d+(?:[.,]\\d+)?)\\s*(km|m)", RegexOption.IGNORE_CASE).find(s) ?: return null
+    val v = m.groupValues[1].replace(",", ".").toDoubleOrNull() ?: return null
+    return if (m.groupValues[2].lowercase() == "km") v * 1000.0 else v
+}
+
+/** The green road sign on its gantry: the turn and its distance, or, without a route, the way you're heading. */
+@Composable
+private fun RoadSign(navigating: Boolean, dist: String?, rest: String, wx: Weather.Now?, city: String, modifier: Modifier, h: Float) {
+    val green = Color(0xFF0B7A3E)
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(green).border(3.dp, Color.White, RoundedCornerShape(10.dp)).padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            val isz = (h * 0.15f).coerceIn(30f, 60f)
+            val ic = if (navigating) NavNotice.icon else null
+            if (ic != null) Image(ic.asImageBitmap(), null, colorFilter = ColorFilter.tint(Color.White), modifier = Modifier.size(isz.dp))
+            else Icon(if (navigating) Icons.Rounded.Navigation else Icons.Rounded.North, null, tint = Color.White, modifier = Modifier.size(isz.dp))
+            Column(Modifier.padding(start = 12.dp)) {
+                val top: String; val bottom: String
+                if (!navigating) {
+                    val hd = Drive.heading
+                    top = if (hd != null) "Sentido ${cardinalName(hd)}" else "Bordo Car"
+                    bottom = city.ifBlank { "" }
+                } else if (dist != null) { top = dist; bottom = rest } else { top = NavNotice.title; bottom = NavNotice.text }
+                val f = (h * 0.12f).coerceIn(20f, 44f)
+                androidx.compose.runtime.key(top) {
+                    Text(top, color = Color.White, fontSize = f.sp, lineHeight = (f * 1.1f).sp, fontWeight = FontWeight.ExtraBold, maxLines = 1,
+                        modifier = if (dist != null) Modifier else Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2000, repeatDelayMillis = 2000, velocity = 40.dp))
+                }
+                if (bottom.isNotBlank()) androidx.compose.runtime.key(bottom) {
+                    Text(bottom, color = Color.White, fontSize = (f * 0.42f).coerceIn(13f, 19f).sp, maxLines = 1,
+                        modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2000, repeatDelayMillis = 2000, velocity = 40.dp))
+                }
+            }
+        }
+        // the gantry's posts
+        Row(Modifier.fillMaxWidth(0.66f), horizontalArrangement = Arrangement.SpaceBetween) {
+            for (k in 0..1) Box(Modifier.width(7.dp).height((h * 0.16f).coerceIn(20f, 70f).dp).background(Brush.verticalGradient(listOf(Color(0xFF9AA1AA), Color(0xFF5D636B)))))
+        }
+    }
+}
+
+private fun cardinalName(deg: Double) = listOf("Norte", "Nordeste", "Leste", "Sudeste", "Sul", "Sudoeste", "Oeste", "Noroeste")[(((deg % 360) + 360) % 360 / 45.0 + 0.5).toInt() % 8]
+
+/** A real-looking highway: grey asphalt with its shoulders, white edge lines, the double yellow line in the middle, and the arrow of
+ *  the next manoeuvre painted on it (yellow). */
+@Composable
+private fun Highway(navigating: Boolean, modifier: Modifier) {
+    val icon = if (navigating) NavNotice.icon else null
+    Canvas(modifier) {
+        val w = size.width; val hh = size.height
+        val cx = w / 2f
+        val horizon = hh * 0.36f
+        fun half(y: Float, top: Float, bottom: Float) = top + (bottom - top) * ((y - horizon) / (hh - horizon)).coerceIn(0f, 1f)
+        // ground and the hills on the horizon
+        drawRect(Brush.verticalGradient(listOf(Color(0xFF2B3A4F), Color(0xFF141A24)), horizon, hh), Offset(0f, horizon), Size(w, hh - horizon))
+        val hills = Path().apply {
+            moveTo(0f, horizon); quadraticBezierTo(w * 0.12f, horizon - hh * 0.04f, w * 0.25f, horizon - hh * 0.015f)
+            quadraticBezierTo(w * 0.4f, horizon - hh * 0.05f, w * 0.55f, horizon - hh * 0.02f); quadraticBezierTo(w * 0.75f, horizon - hh * 0.045f, w, horizon - hh * 0.01f)
+            lineTo(w, horizon + 2f); lineTo(0f, horizon + 2f); close()
+        }
+        drawPath(hills, Color(0xFF1B2A22))
+        // shoulders, asphalt
+        val sTop = w * 0.03f; val sBot = w * 0.40f
+        val aTop = w * 0.023f; val aBot = w * 0.34f
+        drawPath(Path().apply { moveTo(cx - sTop, horizon); lineTo(cx + sTop, horizon); lineTo(cx + sBot, hh); lineTo(cx - sBot, hh); close() }, Color(0xFF2A2F36))
+        drawPath(Path().apply { moveTo(cx - aTop, horizon); lineTo(cx + aTop, horizon); lineTo(cx + aBot, hh); lineTo(cx - aBot, hh); close() },
+            Brush.verticalGradient(listOf(Color(0xFF3A3F47), Color(0xFF23272E)), horizon, hh))
+        // white edges
+        for (sg in listOf(-1f, 1f)) drawLine(Color(0xFFE8E8E8), Offset(cx + sg * aTop * 0.92f, horizon), Offset(cx + sg * aBot * 0.92f, hh), strokeWidth = 4f)
+        // the double yellow line
+        for (sg in listOf(-1f, 1f)) drawLine(Color(0xFFF2C230), Offset(cx + sg * 2f, horizon), Offset(cx + sg * w * 0.011f, hh), strokeWidth = 4f)
+        // the arrow on the asphalt (the app's own arrow, squashed as if lying on the road)
+        if (navigating) {
+            val aw = w * 0.13f; val ah = aw * 0.8f
+            val top = hh * 0.66f
+            if (icon != null) {
+                val img = icon.asImageBitmap()
+                drawImage(img, srcOffset = androidx.compose.ui.unit.IntOffset.Zero, srcSize = androidx.compose.ui.unit.IntSize(img.width, img.height),
+                    dstOffset = androidx.compose.ui.unit.IntOffset((cx - aw / 2f).toInt(), top.toInt()), dstSize = androidx.compose.ui.unit.IntSize(aw.toInt(), ah.toInt()),
+                    alpha = 0.95f, colorFilter = ColorFilter.tint(Color(0xFFFFC24E)))
+            } else {
+                val p = Path().apply {
+                    moveTo(cx - aw * 0.12f, top + ah); lineTo(cx - aw * 0.12f, top + ah * 0.35f); lineTo(cx - aw * 0.32f, top + ah * 0.35f)
+                    lineTo(cx, top); lineTo(cx + aw * 0.32f, top + ah * 0.35f); lineTo(cx + aw * 0.12f, top + ah * 0.35f); lineTo(cx + aw * 0.12f, top + ah); close()
+                }
+                drawPath(p, Color(0xFFFFC24E).copy(alpha = 0.95f))
+            }
+        }
+    }
+}
+
+private class Arrival(val eta: String?, val left: String, val progress: Float, val km: Double? = null)
 
 /**
  * The arrival bar of Estrada. What's left comes from Waze / Google Maps when they say it ("Chegada: 16:26", "12 km", "21 min"); the
@@ -889,7 +1022,7 @@ private fun arrival(now: Long, navigating: Boolean, left: Remaining.Left?, doneM
         else -> 0f
     }.coerceIn(0f, 1f)
     val parts = listOfNotNull(km?.let { (if (approx) "≈ " else "") + fmtKm(it) }, min?.let { fmtMin(it) })
-    return Arrival(eta, parts.joinToString(" · "), progress)
+    return Arrival(eta, parts.joinToString(" · "), progress, km)
 }
 
 private fun fmtKm(v: Double) = (if (v < 100) String.format(BR, "%.1f", v).removeSuffix(",0") else "${Math.round(v)}") + " km"
