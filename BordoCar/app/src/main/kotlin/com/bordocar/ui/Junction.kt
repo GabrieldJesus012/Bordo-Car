@@ -30,6 +30,12 @@ import com.mapbox.maps.extension.style.layers.generated.LineLayer
 import com.mapbox.maps.extension.style.layers.generated.SymbolLayer
 import com.mapbox.maps.extension.style.layers.properties.generated.LineCap
 import com.mapbox.maps.extension.style.layers.properties.generated.LineJoin
+import com.mapbox.maps.extension.style.layers.properties.generated.CirclePitchAlignment
+import com.mapbox.maps.extension.style.layers.properties.generated.CirclePitchScale
+import com.mapbox.maps.extension.style.layers.properties.generated.IconPitchAlignment
+import com.mapbox.maps.extension.style.layers.properties.generated.IconRotationAlignment
+import com.mapbox.maps.extension.style.layers.properties.generated.TextPitchAlignment
+import com.mapbox.maps.toMapboxImage
 import com.mapbox.maps.extension.style.sources.addSource
 import com.mapbox.maps.extension.style.sources.generated.GeoJsonSource
 import com.mapbox.maps.extension.style.sources.getSourceAs
@@ -143,12 +149,18 @@ fun JunctionMap(now: Long, info: JunctionInfo, preset: String, here0: LL, headin
                     st.addSource(GeoJsonSource.Builder("jr-me").featureCollection(pointsFc(emptyList())).build())
                     st.addLayer(LineLayer("jr-route-case", "jr-route").lineColor("#0B2A66").lineWidth(16.0).lineCap(LineCap.ROUND).lineJoin(LineJoin.ROUND).lineEmissiveStrength(1.0))
                     st.addLayer(LineLayer("jr-route-line", "jr-route").lineColor("#3D8BFF").lineWidth(10.0).lineCap(LineCap.ROUND).lineJoin(LineJoin.ROUND).lineEmissiveStrength(1.0))
-                    st.addLayer(LineLayer("jr-turn-line", "jr-turn").lineColor("#FFFFFF").lineWidth(6.0).lineCap(LineCap.ROUND).lineJoin(LineJoin.ROUND).lineEmissiveStrength(1.0))
-                    st.addLayer(CircleLayer("jr-num-c", "jr-num").circleRadius(13.0).circleColor("#151B27").circleStrokeColor("#FFFFFF").circleStrokeWidth(2.0).circleEmissiveStrength(1.0))
-                    st.addLayer(SymbolLayer("jr-num-t", "jr-num").textField(Expression.get("n")).textSize(15.0).textColor("#FFFFFF")
+                    // the turn: a wide white band with an arrowhead at its end, lying on the road
+                    st.addSource(GeoJsonSource.Builder("jr-arrow").featureCollection(pointsFc(emptyList())).build())
+                    try { st.addStyleImage("jr-arrowhead", 1f, arrowHead().toMapboxImage(), false, emptyList(), emptyList(), null) } catch (e: Throwable) { }
+                    st.addLayer(LineLayer("jr-turn-case", "jr-turn").lineColor("#0B1430").lineWidth(20.0).lineCap(LineCap.BUTT).lineJoin(LineJoin.ROUND).lineEmissiveStrength(1.0))
+                    st.addLayer(LineLayer("jr-turn-line", "jr-turn").lineColor("#FFFFFF").lineWidth(14.0).lineCap(LineCap.BUTT).lineJoin(LineJoin.ROUND).lineEmissiveStrength(1.0))
+                    st.addLayer(SymbolLayer("jr-arrow-s", "jr-arrow").iconImage("jr-arrowhead").iconSize(1.0).iconRotate(Expression.get("b"))
+                        .iconRotationAlignment(IconRotationAlignment.MAP).iconPitchAlignment(IconPitchAlignment.MAP).iconAllowOverlap(true).iconIgnorePlacement(true))
+                    st.addLayer(CircleLayer("jr-num-c", "jr-num").circlePitchScale(CirclePitchScale.VIEWPORT).circlePitchAlignment(CirclePitchAlignment.VIEWPORT).circleRadius(12.0).circleColor("#151B27").circleStrokeColor("#FFFFFF").circleStrokeWidth(2.0).circleEmissiveStrength(1.0))
+                    st.addLayer(SymbolLayer("jr-num-t", "jr-num").textField(Expression.get("n")).textSize(14.0).textPitchAlignment(TextPitchAlignment.VIEWPORT).textColor("#FFFFFF")
                         .textFont(listOf("DIN Pro Bold", "Arial Unicode MS Bold")).textAllowOverlap(true).textIgnorePlacement(true))
-                    st.addLayer(CircleLayer("jr-hi-c", "jr-hi").circleRadius(16.0).circleColor("#FFC24E").circleStrokeColor("#FFFFFF").circleStrokeWidth(2.5).circleEmissiveStrength(1.0))
-                    st.addLayer(SymbolLayer("jr-hi-t", "jr-hi").textField(Expression.get("n")).textSize(17.0).textColor("#111111")
+                    st.addLayer(CircleLayer("jr-hi-c", "jr-hi").circlePitchScale(CirclePitchScale.VIEWPORT).circlePitchAlignment(CirclePitchAlignment.VIEWPORT).circleRadius(15.0).circleColor("#FFC24E").circleStrokeColor("#FFFFFF").circleStrokeWidth(2.5).circleEmissiveStrength(1.0))
+                    st.addLayer(SymbolLayer("jr-hi-t", "jr-hi").textField(Expression.get("n")).textSize(16.0).textPitchAlignment(TextPitchAlignment.VIEWPORT).textColor("#111111")
                         .textFont(listOf("DIN Pro Bold", "Arial Unicode MS Bold")).textAllowOverlap(true).textIgnorePlacement(true))
                     st.addLayer(CircleLayer("jr-me-glow", "jr-me").circleRadius(20.0).circleColor("#3D8BFF").circleOpacity(0.3).circleEmissiveStrength(1.0))
                     st.addLayer(CircleLayer("jr-me-dot", "jr-me").circleRadius(10.0).circleColor("#FFFFFF").circleStrokeColor("#3D8BFF").circleStrokeWidth(4.0).circleEmissiveStrength(1.0))
@@ -171,8 +183,15 @@ fun JunctionMap(now: Long, info: JunctionInfo, preset: String, here0: LL, headin
             // the white stretch of the turn itself: from 25 m before to 40 m after it
             val ti = info.line.indices.minByOrNull { dist(info.line[it], info.turnAt) } ?: 0
             var a = ti; while (a > 0 && dist(info.line[a], info.turnAt) < 25.0) a--
-            var b = ti; while (b < info.line.size - 1 && dist(info.line[b], info.turnAt) < 40.0) b++
-            st.getSourceAs<GeoJsonSource>("jr-turn")?.featureCollection(lineFc(info.line.subList(a, b + 1)))
+            var b = ti; while (b < info.line.size - 1 && dist(info.line[b], info.turnAt) < 35.0) b++
+            val band = info.line.subList(a, b + 1)
+            st.getSourceAs<GeoJsonSource>("jr-turn")?.featureCollection(lineFc(band))
+            // the arrowhead at the end of the band, pointing the way out of the turn
+            if (band.size >= 2) {
+                val e = band.last(); val f = band[band.size - 2]
+                val head = Feature.fromGeometry(pt(e)); head.addNumberProperty("b", bearing(f, e))
+                st.getSourceAs<GeoJsonSource>("jr-arrow")?.featureCollection(FeatureCollection.fromFeatures(listOf(head)))
+            }
             val nums = info.numbered
             st.getSourceAs<GeoJsonSource>("jr-num")?.featureCollection(pointsFc(nums.dropLast(1)))
             st.getSourceAs<GeoJsonSource>("jr-hi")?.featureCollection(if (nums.isNotEmpty()) pointsFc(listOf(nums.last()), nums.size) else pointsFc(emptyList()))
@@ -181,15 +200,18 @@ fun JunctionMap(now: Long, info: JunctionInfo, preset: String, here0: LL, headin
         // seen from above: the middle between you and the turn, turned so the way to the turn is up, zoomed to fit both
         // far from the turn: tilted, looking down the road at it (like the drawing); close to it (under ~80 m) the camera rises
         // and looks straight down on the junction
-        val d = dist(here, info.turnAt).coerceAtLeast(30.0)
-        val tilt = ((d - 80.0) / (260.0 - 80.0)).coerceIn(0.0, 1.0)
-        val pitch = 62.0 * tilt
-        val mid = LL(here.lat + (info.turnAt.lat - here.lat) * 0.5, here.lon + (info.turnAt.lon - here.lon) * 0.5)
+        val d = dist(here, info.turnAt).coerceAtLeast(20.0)
+        val tilt = ((d - 80.0) / (280.0 - 80.0)).coerceIn(0.0, 1.0)
+        val pitch = 55.0 * tilt
+        // the camera looks at a point just before the turn (closer to the turn while tilted), so the turn sits in the middle of the
+        // map and not up at its horizon
+        val f = 0.5 - 0.3 * tilt
+        val look = LL(info.turnAt.lat + (here.lat - info.turnAt.lat) * f, info.turnAt.lon + (here.lon - info.turnAt.lon) * f)
         val brg = if (d > 15.0) bearing(here, info.turnAt) else (heading ?: 0.0)
         val hDp = (mv.height / mv.resources.displayMetrics.density).coerceAtLeast(150f)
-        val mpp = d / (hDp * (0.55 + 0.5 * tilt))
-        val zoom = (ln(40_075_016.686 * cos(Math.toRadians(here.lat)) / (512.0 * mpp)) / ln(2.0)).coerceIn(14.5, 18.8)
-        val cam = CameraOptions.Builder().center(pt(mid)).zoom(zoom).pitch(pitch).bearing(brg).build()
+        val mpp = (d * (1.0 - f) * 2.0).coerceAtLeast(60.0) / (hDp * (0.9 + 0.6 * tilt))
+        val zoom = (ln(40_075_016.686 * cos(Math.toRadians(here.lat)) / (512.0 * mpp)) / ln(2.0)).coerceIn(15.0, 18.6)
+        val cam = CameraOptions.Builder().center(pt(look)).zoom(zoom).pitch(pitch).bearing(brg).build()
         try { mv.mapboxMap.easeTo(cam, MapAnimationOptions.mapAnimationOptions { duration(if (first) 1800L else 950L) }) } catch (e: Throwable) { }
         first = false
     }
@@ -199,4 +221,18 @@ private fun bearing(a: LL, b: LL): Double {
     val la1 = Math.toRadians(a.lat); val la2 = Math.toRadians(b.lat); val dl = Math.toRadians(b.lon - a.lon)
     val y = sin(dl) * cos(la2); val x = cos(la1) * sin(la2) - sin(la1) * cos(la2) * cos(dl)
     return (Math.toDegrees(Math.atan2(y, x)) + 360.0) % 360.0
+}
+
+/** The arrowhead lying on the road at the end of the turn: white with a dark edge, pointing up (turned on the map to the way out). */
+private fun arrowHead(): android.graphics.Bitmap {
+    val s = 96
+    val b = android.graphics.Bitmap.createBitmap(s, s, android.graphics.Bitmap.Config.ARGB_8888)
+    val c = android.graphics.Canvas(b)
+    val path = android.graphics.Path().apply { moveTo(s / 2f, 6f); lineTo(s - 8f, s * 0.78f); lineTo(s / 2f, s * 0.6f); lineTo(8f, s * 0.78f); close() }
+    val p = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    p.style = android.graphics.Paint.Style.STROKE; p.strokeWidth = 7f; p.strokeJoin = android.graphics.Paint.Join.ROUND; p.color = 0xFF0B1430.toInt()
+    c.drawPath(path, p)
+    p.style = android.graphics.Paint.Style.FILL; p.color = 0xFFFFFFFF.toInt()
+    c.drawPath(path, p)
+    return b
 }

@@ -852,9 +852,9 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
             // like the drawing: the sky of the hour on top (the sign and the numbers sit there, never over the turn), the night map
             // below the horizon, tilted while the turn is far
             Highway(false, now, Modifier.fillMaxSize())
-            Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.58f)) {
+            Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.62f)) {
                 JunctionMap(now, jinfo, sky.preset, here, hd, Modifier.fillMaxSize(), textureView = !onCar)
-                Box(Modifier.fillMaxWidth().height(36.dp).background(Brush.verticalGradient(listOf(sky.colors.last().copy(alpha = 0.85f), Color.Transparent))))
+                Box(Modifier.fillMaxWidth().height(14.dp).background(Brush.verticalGradient(listOf(sky.colors.last().copy(alpha = 0.7f), Color.Transparent))))
             }
         } else Highway(navigating && !pv, now, Modifier.fillMaxSize())
         if (pv) Text("PRÉVIA", color = Color(0xFF1A0A0A), fontSize = 13.sp, fontWeight = FontWeight.Bold,
