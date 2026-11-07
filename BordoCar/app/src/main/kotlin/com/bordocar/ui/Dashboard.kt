@@ -159,7 +159,7 @@ fun Dashboard(ctx: Context, actions: DashActions, padL: Dp, padT: Dp, padR: Dp, 
             now = System.currentTimeMillis()
             try { NowPlaying.refresh(ctx) } catch (e: Exception) { }
             Sport.update(Math.round((Drive.speed * 3.6).coerceAtLeast(0.0)).toInt())
-            delay(if (Sport.previewing(now)) 250L else if (Modes.cur == "esportivo" || Sport.showing(now)) 500L else 1000L)
+            delay(if (Sport.previewing(now)) 250L else if (Modes.cur == "esportivo" || Sport.showing(now) || JunctionPreview.active(now)) 500L else 1000L)
         }
     }
     // the weather and the town where you are (every 20 minutes)
@@ -198,10 +198,12 @@ fun Dashboard(ctx: Context, actions: DashActions, padL: Dp, padT: Dp, padR: Dp, 
         }
     }
     val navigating = NavNotice.active(now)
+    // the preview of the map of the turn shows Estrada, whatever the mode
+    if (JunctionPreview.active(now)) { RoadDash(now, bat, charging, wx, city, padL, padT, padR, padB); return }
     if (RouteView.show != null && Modes.cur == "normal" && !Sport.showing(now)) { RouteMapScreen(now, padL, padT, padR, padB); return }
     if (Modes.cur == "esportivo" || Sport.showing(now)) { SportDash(now, bat, charging, wx, city, padL, padT, padR, padB); return }
     if (Modes.cur == "musica") { MusicDash(now, bat, charging, wx, city, padL, padT, padR, padB); return }
-    if (Modes.cur == "estrada") { RoadDash(now, bat, charging, wx, city, padL, padT, padR, padB); return }
+    if (Modes.cur == "estrada" || JunctionPreview.active(now)) { RoadDash(now, bat, charging, wx, city, padL, padT, padR, padB); return }
 
     Box(Modifier.fillMaxSize().background(Bg)) {
         Column(Modifier.fillMaxSize().padding(start = padL, top = padT, end = padR, bottom = padB), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -810,14 +812,19 @@ private fun RoadAndCar(modifier: Modifier, top: Dp = 0.dp) {
 @Composable
 private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: String, padL: Dp, padT: Dp, padR: Dp, padB: Dp) {
     @Suppress("UNUSED_VARIABLE") val tk = Drive.tick
-    val navigating = NavNotice.active(now)
-    val left = if (navigating) Remaining.parse(NavNotice.sub, NavNotice.text, NavNotice.title) else null
+    // "Ver prévia" of the map of the turn: a drive along a route near you, up to its first turn
+    val pv = JunctionPreview.active(now)
+    val sim = if (pv) JunctionPreview.sim(now) else null
+    val navigating = NavNotice.active(now) || pv
+    val left = if (navigating && !pv) Remaining.parse(NavNotice.sub, NavNotice.text, NavNotice.title) else null
     val cur = Drive.current()
     val (todayM, todayS) = Drive.today()
     val doneM = cur?.first ?: todayM
     val doneS = cur?.second ?: todayS
     val a = arrival(now, navigating, left, doneM, doneS)
-    val (dist, rest) = if (navigating) NavNotice.split(NavNotice.title, NavNotice.text) else (null to "")
+    val (dist, rest) = if (sim != null) ("${(Math.round(sim.metres / 10.0) * 10)} m" to sim.street)
+        else if (navigating) NavNotice.split(NavNotice.title, NavNotice.text) else (null to "")
+    val kindNow = if (sim != null) sim.kind else maneuver(NavNotice.title + " " + NavNotice.text)
     // the bar takes the colours of the sky of the hour (day, sunset, night), a little darker so the text reads well
     val sky = skyAt(now, Drive.pos)
     fun dark(c: Color, f: Float) = androidx.compose.ui.graphics.lerp(c, Color.Black, f)
@@ -825,12 +832,20 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
         // the sky and the road over the whole screen; the bar's text floats over the sky (with a light shade so it reads well)
         // the map of the next turn (Mapbox, from above) once it's 500 m away or less; the highway otherwise
         val jctx = androidx.compose.ui.platform.LocalContext.current
-        val here = Drive.pos
-        val jm = dist?.let { turnMetres(it) }
-        if (here != null) MapRoute.check(jctx.applicationContext, here)
-        val jinfo = if (navigating && LocalOnCar.current && here != null && jm != null && jm <= 500.0 && MapRoute.enabled(jctx))
-            junctionInfo(here, jm, maneuver(NavNotice.title + " " + NavNotice.text), Drive.heading) else null
-        if (jinfo != null) JunctionMap(now, jinfo, sky.preset, Modifier.fillMaxSize()) else Highway(navigating, now, Modifier.fillMaxSize())
+        val onCar = LocalOnCar.current
+        val here = sim?.here ?: Drive.pos
+        val hd = sim?.heading ?: Drive.heading
+        val jm = if (sim != null) sim.metres else dist?.let { turnMetres(it) }
+        if (here != null && !pv) MapRoute.check(jctx.applicationContext, here)
+        // a route started in Waze / Maps: Mapbox's way to just past the turn, to place it on the real streets and count them
+        if (here != null && !pv && navigating && onCar && jm != null && jm <= 700.0)
+            MapRoute.requestNear(jctx.applicationContext, here, hd, jm, kindNow, NavNotice.key + NavNotice.text)
+        val jinfo = if (navigating && (onCar || pv) && here != null && jm != null && jm <= 500.0 && MapRoute.enabled(jctx))
+            junctionInfo(here, jm, kindNow, hd) else null
+        if (jinfo != null && here != null) JunctionMap(now, jinfo, sky.preset, here, hd, Modifier.fillMaxSize(), textureView = !onCar)
+        else Highway(navigating && !pv, now, Modifier.fillMaxSize())
+        if (pv) Text("PRÉVIA", color = Color(0xFF1A0A0A), fontSize = 13.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = padB + 10.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFFFFC24E)).padding(horizontal = 8.dp, vertical = 2.dp))
         Box(Modifier.fillMaxWidth().height(padT + 90.dp).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.35f), Color.Transparent))))
         Column(Modifier.fillMaxSize().padding(start = padL, top = padT, end = padR, bottom = padB), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp), plain = true)
@@ -864,7 +879,7 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
                 }
                 // the green sign over the road
                 RoadSign(navigating, dist, rest, wx, city, Modifier.align(Alignment.TopCenter).fillMaxWidth(0.36f), h,
-                    nth = jinfo?.nth, kind = if (jinfo != null) maneuver(NavNotice.title + " " + NavNotice.text) else null)
+                    nth = jinfo?.nth, kind = if (jinfo != null) kindNow else null)
                 // the song, small
                 if (NowPlaying.title.isNotBlank()) Text("♪ " + NowPlaying.title + (if (NowPlaying.artist.isNotBlank()) " — " + NowPlaying.artist else ""),
                     color = Color(0xFFC9D6F2), fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,

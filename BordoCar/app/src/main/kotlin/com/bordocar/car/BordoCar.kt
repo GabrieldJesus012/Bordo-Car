@@ -230,12 +230,24 @@ class SettingsScreen(carContext: CarContext) : Screen(carContext) {
             .setToggle(androidx.car.app.model.Toggle.Builder { on ->
                 com.bordocar.ui.Sport.set(carContext, on); invalidate()
             }.setChecked(com.bordocar.ui.Sport.enabled).build()).build())
-        list.addItem(Row.Builder().setTitle("Ver prévia do painel esportivo").addText("Mostra por 14 segundos")
-            .setOnClickListener { com.bordocar.ui.Sport.preview(); screenManager.popToRoot() }.build())
+        list.addItem(Row.Builder().setTitle("Ver prévias").addText("Painel esportivo, mapa da curva").setBrowsable(true)
+            .setOnClickListener { screenManager.push(PreviewsScreen(carContext)) }.build())
         val nav = Prefs(carContext).s("navapp", "waze")
         list.addItem(Row.Builder().setTitle("Navegar com").addText((if (nav == "maps") "Google Maps" else "Waze") + " · toque para trocar")
             .setOnClickListener { Prefs(carContext).put("navapp", if (nav == "maps") "waze" else "maps"); invalidate() }.build())
         return ListTemplate.Builder().setTitle("Bordo Car").setHeaderAction(Action.BACK).setSingleList(list.build()).build()
+    }
+}
+
+/** The previews: the sporty dashboard, the map of the turn (Estrada). */
+class PreviewsScreen(carContext: CarContext) : Screen(carContext) {
+    override fun onGetTemplate(): Template {
+        val list = ItemList.Builder()
+        list.addItem(Row.Builder().setTitle("Painel esportivo").addText("Mostra por 14 segundos")
+            .setOnClickListener { com.bordocar.ui.Sport.preview(); screenManager.popToRoot() }.build())
+        list.addItem(Row.Builder().setTitle("Mapa da curva (modo Estrada)").addText("Anda por uma rota perto de você até a primeira curva, por 16 segundos")
+            .setOnClickListener { com.bordocar.ui.JunctionPreview.start(carContext); screenManager.popToRoot() }.build())
+        return ListTemplate.Builder().setTitle("Ver prévias").setHeaderAction(Action.BACK).setSingleList(list.build()).build()
     }
 }
 

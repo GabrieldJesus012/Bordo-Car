@@ -208,6 +208,9 @@ class MainActivity : ComponentActivity() {
                 OutlinedTextField(tok, { tok = it.trim(); prefs.put("mapbox", tok) }, label = { Text("Chave do Mapbox (pk.…)") }, singleLine = true,
                     modifier = Modifier.fillMaxWidth(), colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White,
                         focusedBorderColor = Accent, unfocusedBorderColor = Edge, focusedLabelColor = Sub, unfocusedLabelColor = Sub))
+                Box(Modifier.clip(RoundedCornerShape(10.dp)).background(Color(0xFF0F1830)).clickable { com.bordocar.ui.JunctionPreview.start(this@MainActivity); scope.launch { scroll.animateScrollTo(0) } }
+                    .padding(horizontal = 16.dp, vertical = 9.dp)) { Text("Ver prévia (16 s)", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
+                Text("A prévia anda por uma rota perto de você até a primeira curva, no painel aqui em cima e na tela do carro, se estiver conectado.", color = Sub, fontSize = 12.sp)
                 if (MapRoute.note.isNotBlank()) Text("Última rota: ${MapRoute.note}", color = Sub, fontSize = 12.sp)
             }
 

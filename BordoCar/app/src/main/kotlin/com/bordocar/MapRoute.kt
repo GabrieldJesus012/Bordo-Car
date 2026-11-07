@@ -25,9 +25,9 @@ object MapRoute {
     @Volatile private var askedAt = 0L
     @Volatile var note = ""
 
-    /** Asks Mapbox for the route from where you are to [to] (in the background). */
-    fun request(ctx: Context, from: LL?, to: LL) {
-        target = to
+    /** Asks Mapbox for the route from where you are to [to] (in the background). [keep]: it's the destination chosen in Bordo Car. */
+    fun request(ctx: Context, from: LL?, to: LL, keep: Boolean = true) {
+        if (keep) target = to
         if (from == null || !enabled(ctx)) { points = emptyList(); turns = emptyList(); return }
         askedAt = System.currentTimeMillis()
         val tok = token(ctx)
@@ -49,6 +49,43 @@ object MapRoute {
     }
 
     fun clear() { target = null; points = emptyList(); turns = emptyList() }
+
+    private var miniKey = ""
+    private var miniAt = 0L
+    /**
+     * A route started in Waze / Google Maps (Bordo Car doesn't know the destination): asks Mapbox for the way from here to just past
+     * the turn the notice speaks of (straight ahead [metres], then a bit to its side). Mapbox follows the real streets, so its route
+     * gives the real spot of the turn and the streets before it, to count them. Once per notice, at most every 20 s.
+     */
+    fun requestNear(ctx: Context, here: LL, heading: Double?, metres: Double, kind: String?, key: String) {
+        if (!enabled(ctx) || heading == null) return
+        if (target != null && points.isNotEmpty() && position(here).second < 60.0) return      // the Bordo route is good
+        val now = System.currentTimeMillis()
+        if (key == miniKey && now - miniAt < 20_000L) return
+        if (now - miniAt < 8_000L) return
+        miniKey = key; miniAt = now
+        val turnDeg = when (kind) { "direita" -> 90.0; "leve-direita" -> 40.0; "esquerda" -> -90.0; "leve-esquerda" -> -40.0; else -> 0.0 }
+        val at = ahead(here, heading, metres)
+        request(ctx, here, ahead(at, heading + turnDeg, 90.0), keep = false)
+    }
+
+    /** A point [m] metres from [p] heading [deg]. */
+    fun ahead(p: LL, deg: Double, m: Double): LL {
+        val r = Math.toRadians(deg)
+        return LL(p.lat + m * Math.cos(r) / 111_320.0, p.lon + m * Math.sin(r) / (111_320.0 * Math.cos(Math.toRadians(p.lat))))
+    }
+
+    /** The point [m] metres along the route, and the way the route goes there. */
+    fun pointAt(m: Double): Pair<LL, Double>? {
+        val pts = points; if (pts.size < 2) return null
+        var i = cum.indexOfFirst { it >= m }; if (i < 1) i = 1; if (i > pts.size - 1) i = pts.size - 1
+        val a = pts[i - 1]; val b = pts[i]
+        val seg = (cum[i] - cum[i - 1]).coerceAtLeast(0.01); val f = ((m - cum[i - 1]) / seg).coerceIn(0.0, 1.0)
+        val p = LL(a.lat + (b.lat - a.lat) * f, a.lon + (b.lon - a.lon) * f)
+        val y = Math.sin(Math.toRadians(b.lon - a.lon)) * Math.cos(Math.toRadians(b.lat))
+        val x = Math.cos(Math.toRadians(a.lat)) * Math.sin(Math.toRadians(b.lat)) - Math.sin(Math.toRadians(a.lat)) * Math.cos(Math.toRadians(b.lat)) * Math.cos(Math.toRadians(b.lon - a.lon))
+        return p to (Math.toDegrees(Math.atan2(y, x)) + 360.0) % 360.0
+    }
 
     private fun parse(o: JSONObject) {
         val r = o.getJSONArray("routes").getJSONObject(0)

@@ -45,10 +45,41 @@ import kotlin.math.sin
 /** What the map of the next turn shows: the turn, the route line around it, the streets to count, and which one it is. */
 class JunctionInfo(val turnAt: LL, val line: List<LL>, val numbered: List<LL>, val nth: Int?, val street: String)
 
-/** A point [m] metres from [p] heading [deg]. */
-private fun ahead(p: LL, deg: Double, m: Double): LL {
-    val r = Math.toRadians(deg)
-    return LL(p.lat + m * cos(r) / 111_320.0, p.lon + m * sin(r) / (111_320.0 * cos(Math.toRadians(p.lat))))
+private fun ahead(p: LL, deg: Double, m: Double) = MapRoute.ahead(p, deg, m)
+
+/**
+ * "Ver prévia" of the map of the turn: for 16 s the car screen (and the phone's preview) shows Estrada with the map, driving along a
+ * real route near you (asked of Mapbox) up to its first turn, without having to drive.
+ */
+object JunctionPreview {
+    const val MS = 16_000L
+    var startedAt by androidx.compose.runtime.mutableLongStateOf(0L)
+        private set
+    var origin: LL? = null; private set
+    fun active(now: Long) = startedAt > 0L && now - startedAt in 0 until MS
+    @android.annotation.SuppressLint("MissingPermission")
+    fun start(ctx: android.content.Context) {
+        val here = Drive.pos ?: try {
+            val m = ctx.getSystemService(android.location.LocationManager::class.java)
+            (m.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER) ?: m.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER))?.let { LL(it.latitude, it.longitude) }
+        } catch (e: Exception) { null } ?: LL(-5.0892, -42.8016)
+        origin = here
+        if (MapRoute.enabled(ctx)) MapRoute.request(ctx.applicationContext, here, ahead(here, Drive.heading ?: 35.0, 900.0), keep = false)
+        startedAt = System.currentTimeMillis()
+    }
+    /** Where the preview's car is now, which way it goes, how far the turn is, which turn and its street. */
+    class Sim(val here: LL, val heading: Double, val metres: Double, val kind: String, val street: String)
+    fun sim(now: Long): Sim {
+        val t = (now - startedAt) / 1000.0
+        val turn = MapRoute.turns.firstOrNull { it.alongM > 200.0 && it.kind in setOf("direita", "esquerda", "leve-direita", "leve-esquerda") } ?: MapRoute.turns.firstOrNull()
+        if (turn != null) {
+            val m = (turn.alongM - 380.0 + t * 24.0).coerceAtMost(turn.alongM - 12.0).coerceAtLeast(0.0)
+            val p = MapRoute.pointAt(m)
+            if (p != null) return Sim(p.first, p.second, turn.alongM - m, turn.kind, turn.street)
+        }
+        val o = origin ?: LL(-5.0892, -42.8016)
+        return Sim(o, 0.0, (260.0 - t * 14.0).coerceAtLeast(30.0), "direita", "Rua de exemplo")
+    }
 }
 
 /**
@@ -88,7 +119,7 @@ private fun styleJson(preset: String) = org.json.JSONObject()
  * view, like Horizon Nav, then flattens out over the junction and follows you to it.
  */
 @Composable
-fun JunctionMap(now: Long, info: JunctionInfo, preset: String, modifier: Modifier) {
+fun JunctionMap(now: Long, info: JunctionInfo, preset: String, here0: LL, heading: Double?, modifier: Modifier, textureView: Boolean = false) {
     val ctx = LocalContext.current
     val token = MapRoute.token(ctx)
     var view by remember { mutableStateOf<MapView?>(null) }
@@ -96,9 +127,8 @@ fun JunctionMap(now: Long, info: JunctionInfo, preset: String, modifier: Modifie
     var first by remember { mutableStateOf(true) }
     AndroidView(factory = { c ->
         try { MapboxOptions.accessToken = token } catch (e: Throwable) { }
-        val here = Drive.pos ?: info.turnAt
-        val mv = MapView(c, MapInitOptions(c, textureView = false, styleUri = null,
-            cameraOptions = CameraOptions.Builder().center(pt(here)).zoom(15.2).pitch(60.0).bearing(Drive.heading ?: 0.0).build()))
+        val mv = MapView(c, MapInitOptions(c, textureView = textureView, styleUri = null,
+            cameraOptions = CameraOptions.Builder().center(pt(here0)).zoom(15.2).pitch(60.0).bearing(heading ?: 0.0).build()))
         try { mv.scalebar.enabled = false } catch (e: Throwable) { }
         try { mv.compass.enabled = false } catch (e: Throwable) { }
         try { mv.gestures.updateSettings { scrollEnabled = false; rotateEnabled = false; pitchEnabled = false; pinchToZoomEnabled = false; doubleTapToZoomInEnabled = false } } catch (e: Throwable) { }
@@ -131,10 +161,10 @@ fun JunctionMap(now: Long, info: JunctionInfo, preset: String, modifier: Modifie
     DisposableEffect(Unit) { onDispose { try { view?.onStop(); view?.onDestroy() } catch (e: Throwable) { } } }
 
     // follows you each second: the data on the map, and the camera between you and the turn
-    LaunchedEffect(style, now / 1000L, info) {
+    LaunchedEffect(style, now / 500L, info) {
         val st = style ?: return@LaunchedEffect
         val mv = view ?: return@LaunchedEffect
-        val here = Drive.pos ?: return@LaunchedEffect
+        val here = here0
         try {
             st.getSourceAs<GeoJsonSource>("jr-route")?.featureCollection(lineFc(info.line))
             // the white stretch of the turn itself: from 25 m before to 40 m after it
@@ -150,7 +180,7 @@ fun JunctionMap(now: Long, info: JunctionInfo, preset: String, modifier: Modifie
         // seen from above: the middle between you and the turn, turned so the way to the turn is up, zoomed to fit both
         val d = dist(here, info.turnAt).coerceAtLeast(40.0)
         val mid = LL((here.lat + info.turnAt.lat) / 2, (here.lon + info.turnAt.lon) / 2)
-        val brg = if (d > 15.0) bearing(here, info.turnAt) else (Drive.heading ?: 0.0)
+        val brg = if (d > 15.0) bearing(here, info.turnAt) else (heading ?: 0.0)
         val hDp = (mv.height / mv.resources.displayMetrics.density).coerceAtLeast(200f)
         val mpp = d / (hDp * 0.42)
         val zoom = (ln(40_075_016.686 * cos(Math.toRadians(here.lat)) / (512.0 * mpp)) / ln(2.0)).coerceIn(14.0, 18.6)
