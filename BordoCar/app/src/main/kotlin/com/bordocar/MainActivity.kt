@@ -292,6 +292,12 @@ class MainActivity : ComponentActivity() {
                 Item("Sobrepor a outros apps", "Para Casa, Trabalho, Favoritos, Postos e Buscar conseguirem abrir o Waze ou o Google Maps", over, "Permitir") {
                     try { startActivity(Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))) } catch (e: Exception) { }
                 }
+                if (Build.VERSION.SDK_INT >= 34) {
+                    val fsi = getSystemService(android.app.NotificationManager::class.java).canUseFullScreenIntent()
+                    Item("Notificações em tela cheia", "Para Casa, Trabalho, Favoritos e Buscar abrirem a rota mesmo com o celular bloqueado", fsi, "Permitir") {
+                        try { startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:$packageName"))) } catch (e: Exception) { }
+                    }
+                }
                 if (!notif) Item("Notificações", "O aviso discreto enquanto conta os km no carro", false, "Permitir") {
                     if (Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 2)
                 }
@@ -318,8 +324,8 @@ class MainActivity : ComponentActivity() {
                 val raw = NavNotice.lastRaw
                 val tap = com.bordocar.car.DashSurface.lastTap
                 if (tap.isNotBlank()) Text("Último toque na tela do carro: $tap", color = Sub, fontSize = 12.sp)
-                val nn = com.bordocar.car.navNote
-                if (nn.isNotBlank()) Text("Último destino enviado: $nn", color = Sub, fontSize = 12.sp)
+                val hist = com.bordocar.car.navHistory.toList()
+                if (hist.isNotEmpty()) Text("Destinos enviados pelo carro (o mais novo em cima):\n" + hist.take(8).joinToString("\n"), color = Sub, fontSize = 12.sp)
                 if (Weather.lastNote.isNotBlank()) Text("Clima: ${Weather.lastNote}", color = Sub, fontSize = 12.sp)
                 if (DriveService.running || Drive.lastFixAt > 0L) {
                     val ago = if (Drive.lastFixAt > 0L) "${(System.currentTimeMillis() - Drive.lastFixAt) / 1000} s" else "nenhum ainda"

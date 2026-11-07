@@ -59,6 +59,7 @@ class BordoCarService : CarAppService() {
 
 /** Hands a destination to the navigation app Android Auto uses (Waze or Google Maps): an address, a place name or "lat,lon". */
 fun navigateTo(car: CarContext, q: String) {
+    navNote = "tocou: ${q.trim().take(40)} (celular ${phoneState(car)})"
     val ll = q.trim().replace(" ", "")
     val uri = if (Regex("^-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?$").matches(ll)) "geo:$ll?q=$ll" else "geo:0,0?q=" + Uri.encode(q.trim())
     rememberTarget(car.applicationContext, ll, com.bordocar.Drive.pos)
@@ -135,10 +136,13 @@ fun startRouteFromPhone(ctx: android.content.Context, q: String, from: com.bordo
  * something over the other apps, so this needs "Sobrepor a outros apps" (asked on the phone) and puts up a 1-pixel window for a moment.
  */
 private fun openOnPhone(ctx: android.content.Context, pkg: String, ll: String, q: String): Boolean {
-    if (!android.provider.Settings.canDrawOverlays(ctx)) { navNote = "falta a permissão \"Sobrepor a outros apps\" no celular"; return false }
     val point = Regex("^-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?$").matches(ll)
     val link = if (pkg == "com.waze") (if (point) "https://waze.com/ul?ll=$ll&navigate=yes" else "https://waze.com/ul?q=${Uri.encode(q)}&navigate=yes")
                else "google.navigation:q=" + (if (point) ll else Uri.encode(q))
+    // with the phone's screen off or locked the trick below doesn't work (Android doesn't count a window nobody can see): a
+    // full-screen notice opens a blank screen over the lock for an instant, and that opens the app
+    if (phoneAsleep(ctx)) return viaLockScreen(ctx, pkg, link)
+    if (!android.provider.Settings.canDrawOverlays(ctx)) { navNote = "falta a permissão \"Sobrepor a outros apps\" no celular"; return false }
     val wm = ctx.getSystemService(android.view.WindowManager::class.java)
     val dot = android.view.View(ctx)
     val lp = android.view.WindowManager.LayoutParams(1, 1, android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
@@ -151,8 +155,44 @@ private fun openOnPhone(ctx: android.content.Context, pkg: String, ll: String, q
     return ok
 }
 
-/** What happened the last time a destination was handed over (shown on the phone, to check). */
-@Volatile var navNote = ""
+private fun phoneAsleep(ctx: android.content.Context): Boolean = try {
+    !ctx.getSystemService(android.os.PowerManager::class.java).isInteractive || ctx.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked
+} catch (e: Exception) { false }
+
+private fun phoneState(ctx: android.content.Context): String = try {
+    val on = ctx.getSystemService(android.os.PowerManager::class.java).isInteractive
+    val locked = ctx.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked
+    (if (on) "tela acesa" else "tela apagada") + (if (locked) ", bloqueado" else ", desbloqueado")
+} catch (e: Exception) { "?" }
+
+private fun viaLockScreen(ctx: android.content.Context, pkg: String, link: String): Boolean {
+    val nm = ctx.getSystemService(android.app.NotificationManager::class.java)
+    if (android.os.Build.VERSION.SDK_INT >= 33 && ctx.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+        navNote = "celular bloqueado e sem permissão de notificações"; return false
+    }
+    if (android.os.Build.VERSION.SDK_INT >= 34 && !nm.canUseFullScreenIntent()) {
+        navNote = "celular bloqueado: falta liberar \"Notificações em tela cheia\" para o Bordo Car"; return false
+    }
+    return try {
+        nm.createNotificationChannel(android.app.NotificationChannel("abrir_rota", "Abrir a rota com o celular bloqueado", android.app.NotificationManager.IMPORTANCE_HIGH))
+        val i = Intent(ctx, com.bordocar.OpenRoute::class.java).putExtra("link", link).putExtra("pkg", pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val pi = android.app.PendingIntent.getActivity(ctx, 7, i, android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE)
+        val n = android.app.Notification.Builder(ctx, "abrir_rota").setSmallIcon(com.bordocar.R.drawable.ic_stat).setContentTitle("Abrindo a rota…")
+            .setCategory(android.app.Notification.CATEGORY_NAVIGATION).setFullScreenIntent(pi, true).setAutoCancel(true).setTimeoutAfter(20_000L).build()
+        nm.notify(com.bordocar.OpenRoute.NOTE_ID, n)
+        navNote = "celular bloqueado: abrindo pela tela de bloqueio"
+        true
+    } catch (e: Exception) { navNote = "celular bloqueado e não abriu: ${e.javaClass.simpleName}"; false }
+}
+
+/** What happened the last times a destination was handed over (shown on the phone, to check). */
+val navHistory = java.util.concurrent.CopyOnWriteArrayList<String>()
+var navNote = ""
+    set(v) {
+        field = v
+        navHistory.add(0, java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale("pt", "BR")).format(java.util.Date()) + "  " + v)
+        while (navHistory.size > 10) navHistory.removeAt(navHistory.size - 1)
+    }
 
 class BordoSession : Session() {
     private lateinit var surface: DashSurface
