@@ -9,6 +9,8 @@ android {
     compileSdk = 36
 
     defaultConfig {
+        // only the chips phones use (the Mapbox map brings native code for each); the emulator test adds its own with -Px86
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") + (if (project.hasProperty("x86")) listOf("x86_64") else emptyList()) }
         applicationId = "com.bordocar.app"
         minSdk = 26
         targetSdk = 34
@@ -50,12 +52,17 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
+    packaging {
+        resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        jniLibs.pickFirsts += "**/libc++_shared.so"
+    }
 }
 
 kotlin { jvmToolchain(17) }
 
 dependencies {
+    // the map of the next turn (Estrada), the same map as Horizon Nav
+    implementation("com.mapbox.maps:android:11.32.1")
     val bom = platform("androidx.compose:compose-bom:2025.06.00")
     implementation(bom)
     implementation("androidx.compose.ui:ui")

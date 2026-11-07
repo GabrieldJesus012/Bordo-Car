@@ -1,0 +1,134 @@
+package com.bordocar
+
+import android.content.Context
+import org.json.JSONObject
+
+/**
+ * The map of the next turn (Estrada): the Mapbox key, and the route Mapbox gives for the destination chosen in Bordo Car (Casa,
+ * Trabalho, a favourite, a search). Waze / Google Maps don't say where their turns are, so with that route Bordo Car knows the exact
+ * spot of each turn and can count the streets before it ("3ª à direita"). Without it (a route started in Waze / Maps itself) the
+ * turn is placed from the distance in their notice, straight ahead.
+ */
+object MapRoute {
+    /** The Mapbox public key (pk.…), pasted in the phone's settings (not kept in the code). */
+    private const val DEFAULT_TOKEN = ""
+    fun token(ctx: Context): String = Prefs(ctx).s("mapbox", DEFAULT_TOKEN).trim()
+    fun enabled(ctx: Context): Boolean = Prefs(ctx).b("junction", true) && token(ctx).startsWith("pk.")
+
+    /** A turn of the route: where it is, which way, the street, and the crossings with a street on that side before it. */
+    class Turn(val at: LL, val kind: String, val street: String, val sideStreets: List<LL>, val alongM: Double)
+
+    @Volatile var points: List<LL> = emptyList(); private set
+    private var cum = DoubleArray(0)
+    @Volatile var turns: List<Turn> = emptyList(); private set
+    @Volatile private var target: LL? = null
+    @Volatile private var askedAt = 0L
+    @Volatile var note = ""
+
+    /** Asks Mapbox for the route from where you are to [to] (in the background). */
+    fun request(ctx: Context, from: LL?, to: LL) {
+        target = to
+        if (from == null || !enabled(ctx)) { points = emptyList(); turns = emptyList(); return }
+        askedAt = System.currentTimeMillis()
+        val tok = token(ctx)
+        Thread {
+            try {
+                val url = "https://api.mapbox.com/directions/v5/mapbox/driving/${from.lon},${from.lat};${to.lon},${to.lat}" +
+                    "?steps=true&geometries=geojson&overview=full&language=pt-BR&access_token=$tok"
+                parse(JSONObject(httpGet(url, 12_000)))
+                note = "rota do Mapbox: ${turns.size} curvas"
+            } catch (e: Exception) { note = "rota do Mapbox não veio: ${e.javaClass.simpleName}"; points = emptyList(); turns = emptyList() }
+        }.start()
+    }
+
+    /** When you've left Mapbox's route (Waze took another way): ask again from here, at most once a minute. */
+    fun check(ctx: Context, here: LL) {
+        val t = target ?: return
+        if (points.isEmpty() || System.currentTimeMillis() - askedAt < 60_000L) return
+        if (distToRoute(here) > 80.0) request(ctx, here, t)
+    }
+
+    fun clear() { target = null; points = emptyList(); turns = emptyList() }
+
+    private fun parse(o: JSONObject) {
+        val r = o.getJSONArray("routes").getJSONObject(0)
+        val g = r.getJSONObject("geometry").getJSONArray("coordinates")
+        val pts = (0 until g.length()).map { val c = g.getJSONArray(it); LL(c.getDouble(1), c.getDouble(0)) }
+        val c = DoubleArray(pts.size)
+        for (i in 1 until pts.size) c[i] = c[i - 1] + dist(pts[i - 1], pts[i])
+        val out = ArrayList<Turn>()
+        val steps = r.getJSONArray("legs").getJSONObject(0).getJSONArray("steps")
+        for (i in 1 until steps.length()) {
+            val st = steps.getJSONObject(i)
+            val m = st.getJSONObject("maneuver")
+            val type = m.optString("type"); val mod = m.optString("modifier")
+            if (type == "arrive" || type == "depart") continue
+            val loc = m.getJSONArray("location"); val at = LL(loc.getDouble(1), loc.getDouble(0))
+            val kind = when {
+                type == "roundabout" || type == "rotary" -> "rotatoria"
+                mod == "uturn" -> "retorno"
+                mod == "right" || mod == "sharp right" -> "direita"
+                mod == "left" || mod == "sharp left" -> "esquerda"
+                mod == "slight right" -> "leve-direita"
+                mod == "slight left" -> "leve-esquerda"
+                else -> "frente"
+            }
+            // the crossings on the way to this turn (the previous step's) with a street to the same side
+            val side = when (kind) { "direita", "leve-direita" -> 1; "esquerda", "leve-esquerda" -> -1; else -> 0 }
+            val crossings = ArrayList<LL>()
+            if (side != 0) {
+                val prev = steps.getJSONObject(i - 1).optJSONArray("intersections")
+                if (prev != null) for (k in 1 until prev.length()) {
+                    val x = prev.getJSONObject(k)
+                    val b = x.optJSONArray("bearings") ?: continue
+                    val inI = x.optInt("in", -1); if (inI < 0) continue
+                    val travel = (b.getDouble(inI) + 180.0) % 360.0
+                    var has = false
+                    for (j in 0 until b.length()) {
+                        if (j == inI) continue
+                        val rel = ((b.getDouble(j) - travel) + 360.0) % 360.0
+                        if ((side > 0 && rel in 30.0..150.0) || (side < 0 && rel in 210.0..330.0)) has = true
+                    }
+                    if (has) { val l = x.getJSONArray("location"); crossings.add(LL(l.getDouble(1), l.getDouble(0))) }
+                }
+            }
+            out.add(Turn(at, kind, st.optString("name"), crossings, along(pts, c, at)))
+        }
+        points = pts; cum = c; turns = out
+    }
+
+    private fun along(pts: List<LL>, c: DoubleArray, p: LL): Double {
+        var best = Double.MAX_VALUE; var at = 0.0
+        for (i in pts.indices) { val d = dist(pts[i], p); if (d < best) { best = d; at = c[i] } }
+        return at
+    }
+    /** How far along the route you are (metres), and how far from it. */
+    fun position(here: LL): Pair<Double, Double> {
+        val pts = points; if (pts.isEmpty()) return 0.0 to Double.MAX_VALUE
+        var best = Double.MAX_VALUE; var at = 0.0
+        for (i in pts.indices) { val d = dist(pts[i], here); if (d < best) { best = d; at = cum.getOrElse(i) { 0.0 } } }
+        return at to best
+    }
+    private fun distToRoute(here: LL) = position(here).second
+
+    /**
+     * The turn the navigation notice speaks of: on Mapbox's route, the next turn ahead of you about [metres] away (and of the same
+     * kind when it's known); null when there's no route, you're off it, or none fits.
+     */
+    fun next(here: LL, metres: Double?, kind: String?): Turn? {
+        val (pos, off) = position(here)
+        if (points.isEmpty() || off > 60.0) return null
+        val ahead = turns.filter { it.alongM > pos + 5.0 }
+        if (ahead.isEmpty()) return null
+        if (metres == null) return ahead.first()
+        return ahead.filter { kind == null || it.kind == kind || kind == "frente" }
+            .minByOrNull { Math.abs((it.alongM - pos) - metres) }
+            ?.takeIf { Math.abs((it.alongM - pos) - metres) < maxOf(80.0, metres * 0.35) }
+    }
+
+    /** The route from about [backM] before to [aheadM] after the place [fromM] along it. */
+    fun slice(fromM: Double, toM: Double): List<LL> {
+        val pts = points; if (pts.size < 2) return emptyList()
+        return pts.indices.filter { cum[it] in fromM..toM }.map { pts[it] }
+    }
+}

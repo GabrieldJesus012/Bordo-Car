@@ -194,6 +194,23 @@ class MainActivity : ComponentActivity() {
                 } + " A prévia lá em cima já mostra.", color = Sub, fontSize = 12.sp)
             }
 
+            Section("Mapa da curva (modo Estrada)") {
+                var on by remember { mutableStateOf(prefs.b("junction", true)) }
+                var tok by remember { mutableStateOf(MapRoute.token(this@MainActivity)) }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Mostrar o mapa da curva", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Faltando 500 m para a curva, o modo Estrada mostra o mapa de cima do cruzamento (Mapbox). Com a rota começada " +
+                            "pelos atalhos do Bordo, conta as ruas: \"3ª à direita\". Usa internet.", color = Sub, fontSize = 12.sp)
+                    }
+                    androidx.compose.material3.Switch(on, { on = it; prefs.put("junction", it) })
+                }
+                OutlinedTextField(tok, { tok = it.trim(); prefs.put("mapbox", tok) }, label = { Text("Chave do Mapbox (pk.…)") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth(), colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                        focusedBorderColor = Accent, unfocusedBorderColor = Edge, focusedLabelColor = Sub, unfocusedLabelColor = Sub))
+                if (MapRoute.note.isNotBlank()) Text("Última rota: ${MapRoute.note}", color = Sub, fontSize = 12.sp)
+            }
+
             Section("Painel esportivo") {
                 com.bordocar.ui.Sport.load(this@MainActivity)
                 val on = com.bordocar.ui.Sport.enabled

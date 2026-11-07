@@ -18,7 +18,7 @@ jobs:
         with: { gradle-version: 8.14.4 }
       - name: Build
         working-directory: BordoCar
-        run: gradle :app:assembleRelease
+        run: gradle :app:assembleRelease -Px86=true
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules

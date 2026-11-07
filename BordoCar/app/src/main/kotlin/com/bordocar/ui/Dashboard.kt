@@ -81,6 +81,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bordocar.Drive
 import com.bordocar.LL
+import com.bordocar.MapRoute
 import com.bordocar.dist
 import com.bordocar.Limits
 import com.bordocar.NavNotice
@@ -822,13 +823,21 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
     fun dark(c: Color, f: Float) = androidx.compose.ui.graphics.lerp(c, Color.Black, f)
     Box(Modifier.fillMaxSize().background(dark(sky.colors[0], 0.2f))) {
         // the sky and the road over the whole screen; the bar's text floats over the sky (with a light shade so it reads well)
-        Highway(navigating, now, Modifier.fillMaxSize())
+        // the map of the next turn (Mapbox, from above) once it's 500 m away or less; the highway otherwise
+        val jctx = androidx.compose.ui.platform.LocalContext.current
+        val here = Drive.pos
+        val jm = dist?.let { turnMetres(it) }
+        if (here != null) MapRoute.check(jctx.applicationContext, here)
+        val jinfo = if (navigating && LocalOnCar.current && here != null && jm != null && jm <= 500.0 && MapRoute.enabled(jctx))
+            junctionInfo(here, jm, maneuver(NavNotice.title + " " + NavNotice.text), Drive.heading) else null
+        if (jinfo != null) JunctionMap(now, jinfo, sky.preset, Modifier.fillMaxSize()) else Highway(navigating, now, Modifier.fillMaxSize())
         Box(Modifier.fillMaxWidth().height(padT + 90.dp).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.35f), Color.Transparent))))
         Column(Modifier.fillMaxSize().padding(start = padL, top = padT, end = padR, bottom = padB), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp), plain = true)
           Box(Modifier.fillMaxWidth().weight(1f)) {
           Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Timeline(now, navigating, a, doneM, dist, Modifier.fillMaxWidth().height(82.dp))
+            // (the trip's line steps aside while the map of the turn is up)
+            if (jinfo == null) Timeline(now, navigating, a, doneM, dist, Modifier.fillMaxWidth().height(82.dp))
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 14.dp)) {
                 val h = maxHeight.value
                 val big = (h * 0.3f).coerceIn(36f, 110f)
@@ -854,7 +863,8 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
                     if (mins >= 120) Text("☕ hora de uma pausa?", color = Color(0xFFFFC24E), fontSize = 15.sp)
                 }
                 // the green sign over the road
-                RoadSign(navigating, dist, rest, wx, city, Modifier.align(Alignment.TopCenter).fillMaxWidth(0.36f), h)
+                RoadSign(navigating, dist, rest, wx, city, Modifier.align(Alignment.TopCenter).fillMaxWidth(0.36f), h,
+                    nth = jinfo?.nth, kind = if (jinfo != null) maneuver(NavNotice.title + " " + NavNotice.text) else null)
                 // the song, small
                 if (NowPlaying.title.isNotBlank()) Text("♪ " + NowPlaying.title + (if (NowPlaying.artist.isNotBlank()) " — " + NowPlaying.artist else ""),
                     color = Color(0xFFC9D6F2), fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -913,7 +923,7 @@ private fun turnMetres(s: String): Double? {
 
 /** The green road sign on its gantry: the turn and its distance, or, without a route, the way you're heading. */
 @Composable
-private fun RoadSign(navigating: Boolean, dist: String?, rest: String, wx: Weather.Now?, city: String, modifier: Modifier, h: Float) {
+private fun RoadSign(navigating: Boolean, dist: String?, rest: String, wx: Weather.Now?, city: String, modifier: Modifier, h: Float, nth: Int? = null, kind: String? = null) {
     val green = Color(0xFF0B7A3E)
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(green).border(3.dp, Color.White, RoundedCornerShape(10.dp)).padding(horizontal = 14.dp, vertical = 8.dp),
@@ -928,6 +938,9 @@ private fun RoadSign(navigating: Boolean, dist: String?, rest: String, wx: Weath
                     val hd = Drive.heading
                     top = if (hd != null) "Sentido ${cardinalName(hd)}" else "Bordo Car"
                     bottom = city.ifBlank { "" }
+                } else if (nth != null && dist != null && (kind == "direita" || kind == "esquerda" || kind == "leve-direita" || kind == "leve-esquerda")) {
+                    // counted on Mapbox's route: "3ª à direita", the distance and the street underneath
+                    top = "${nth}ª à " + (if (kind.endsWith("direita")) "direita" else "esquerda"); bottom = listOf(dist, rest).filter { it.isNotBlank() }.joinToString(" · ")
                 } else if (dist != null) { top = dist; bottom = rest } else { top = NavNotice.title; bottom = NavNotice.text }
                 val f = (h * 0.12f).coerceIn(20f, 44f)
                 androidx.compose.runtime.key(top) {
@@ -947,7 +960,10 @@ private fun RoadSign(navigating: Boolean, dist: String?, rest: String, wx: Weath
     }
 }
 
-private class Sky(val colors: List<Color>, val ground: List<Color>, val hills: Color, val stars: Float, val sun: Float)
+private class Sky(val colors: List<Color>, val ground: List<Color>, val hills: Color, val stars: Float, val sun: Float, val preset: String = "day")
+
+/** Whether this composition is the car screen (the map of the turn is drawn only there). */
+val LocalOnCar = androidx.compose.runtime.staticCompositionLocalOf { false }
 
 /** The sky for the hour, from the sunrise and sunset where you are (Teresina when the GPS hasn't answered yet). */
 private fun skyAt(now: Long, pos: LL?): Sky {
@@ -965,12 +981,12 @@ private fun skyAt(now: Long, pos: LL?): Sky {
     // how close to sunrise / sunset (1 at the moment itself, 0 from 45 minutes away)
     val glow = maxOf(1 - Math.abs(m - rise) / 45.0, 1 - Math.abs(m - set) / 45.0).coerceIn(0.0, 1.0).toFloat()
     val day = m > rise && m < set
-    val dayS = Sky(listOf(Color(0xFF1E5FC4), Color(0xFF4F95E6), Color(0xFFA8D4FF)), listOf(Color(0xFF3B4655), Color(0xFF1C222C)), Color(0xFF34506E), 0f, 0f)
-    val nightS = Sky(listOf(Color(0xFF03060E), Color(0xFF0A1428), Color(0xFF16264A)), listOf(Color(0xFF1E2633), Color(0xFF0E1218)), Color(0xFF0B1424), 1f, 0f)
-    val duskS = Sky(listOf(Color(0xFF1D2B57), Color(0xFFB0507A), Color(0xFFFF9A4D)), listOf(Color(0xFF33343F), Color(0xFF17181F)), Color(0xFF3A2440), 0.3f, 1f)
+    val dayS = Sky(listOf(Color(0xFF1E5FC4), Color(0xFF4F95E6), Color(0xFFA8D4FF)), listOf(Color(0xFF3B4655), Color(0xFF1C222C)), Color(0xFF34506E), 0f, 0f, "day")
+    val nightS = Sky(listOf(Color(0xFF03060E), Color(0xFF0A1428), Color(0xFF16264A)), listOf(Color(0xFF1E2633), Color(0xFF0E1218)), Color(0xFF0B1424), 1f, 0f, "night")
+    val duskS = Sky(listOf(Color(0xFF1D2B57), Color(0xFFB0507A), Color(0xFFFF9A4D)), listOf(Color(0xFF33343F), Color(0xFF17181F)), Color(0xFF3A2440), 0.3f, 1f, "dusk")
     fun mix(a: Sky, b: Sky, f: Float) = Sky(a.colors.zip(b.colors) { x, y -> androidx.compose.ui.graphics.lerp(x, y, f) },
         a.ground.zip(b.ground) { x, y -> androidx.compose.ui.graphics.lerp(x, y, f) }, androidx.compose.ui.graphics.lerp(a.hills, b.hills, f),
-        a.stars + (b.stars - a.stars) * f, a.sun + (b.sun - a.sun) * f)
+        a.stars + (b.stars - a.stars) * f, a.sun + (b.sun - a.sun) * f, if (f > 0.35f) b.preset else a.preset)
     return mix(if (day) dayS else nightS, duskS, glow)
 }
 

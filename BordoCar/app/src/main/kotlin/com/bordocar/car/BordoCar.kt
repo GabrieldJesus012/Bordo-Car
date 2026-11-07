@@ -66,7 +66,9 @@ fun navigateTo(car: CarContext, q: String) {
         val t = com.bordocar.LL(m.groupValues[1].toDouble(), m.groupValues[2].toDouble())
         com.bordocar.NavNotice.target = t; com.bordocar.NavNotice.targetAt = System.currentTimeMillis()
         com.bordocar.NavNotice.targetFromM = com.bordocar.Drive.pos?.let { com.bordocar.dist(it, t) } ?: 0.0
-    } ?: run { com.bordocar.NavNotice.target = null }
+        // the same route from Mapbox, to know where each turn is (the map of the turn in Estrada)
+        com.bordocar.MapRoute.request(car.applicationContext, com.bordocar.Drive.pos, t)
+    } ?: run { com.bordocar.NavNotice.target = null; com.bordocar.MapRoute.clear() }
     val pm = car.packageManager
     fun has(p: String) = try { pm.getPackageInfo(p, 0); true } catch (e: Exception) { false }
     val choice = Prefs(car).s("navapp", "waze")
@@ -311,7 +313,7 @@ class DashSurface(private val carContext: CarContext, private val actions: DashA
                     val l = px(a?.left ?: 0); val t = px(a?.top ?: 0)
                     val r = px(width - (a?.right ?: width)); val b = px(height - (a?.bottom ?: height))
                     // (the top: Android Auto counts its two buttons there as covered, but the dashboard's top bar is made to sit under them)
-                    Dashboard(appCtx, actions, l + 16.dp, 12.dp, r + 16.dp, b + 12.dp)
+                    CompositionLocalProvider(com.bordocar.ui.LocalOnCar provides true) { Dashboard(appCtx, actions, l + 16.dp, 12.dp, r + 16.dp, b + 12.dp) }
                 }
             }
             root.addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
