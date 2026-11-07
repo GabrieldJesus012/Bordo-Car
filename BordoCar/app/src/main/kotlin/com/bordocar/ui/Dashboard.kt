@@ -852,7 +852,7 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
             // like the drawing: the sky of the hour on top (the sign and the numbers sit there, never over the turn), the night map
             // below the horizon, tilted while the turn is far
             Highway(false, now, Modifier.fillMaxSize())
-            Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.62f)) {
+            Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.68f)) {
                 JunctionMap(now, jinfo, sky.preset, here, hd, Modifier.fillMaxSize(), textureView = !onCar)
                 Box(Modifier.fillMaxWidth().height(14.dp).background(Brush.verticalGradient(listOf(sky.colors.last().copy(alpha = 0.7f), Color.Transparent))))
             }
@@ -986,8 +986,8 @@ private fun RoadSign(navigating: Boolean, dist: String?, rest: String, wx: Weath
                 }
             }
         }
-        // the gantry's posts
-        Row(Modifier.fillMaxWidth(0.66f), horizontalArrangement = Arrangement.SpaceBetween) {
+        // the gantry's posts (not over the map of the turn)
+        if (kind == null) Row(Modifier.fillMaxWidth(0.66f), horizontalArrangement = Arrangement.SpaceBetween) {
             for (k in 0..1) Box(Modifier.width(7.dp).height((h * 0.16f).coerceIn(20f, 70f).dp).background(Brush.verticalGradient(listOf(Color(0xFF9AA1AA), Color(0xFF5D636B)))))
         }
     }

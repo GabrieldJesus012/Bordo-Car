@@ -97,7 +97,7 @@ fun junctionInfo(here: LL, metres: Double, kind: String?, heading: Double?): Jun
     if (t != null) {
         val pos = MapRoute.position(here).first
         val line = MapRoute.slice(pos - 30.0, t.alongM + 120.0)
-        val crossings = t.sideStreets.filter { MapRoute.position(it).first in (pos + 3.0)..(t.alongM - 8.0) }
+        val crossings = t.sideStreets.filter { MapRoute.position(it).first in (pos + 15.0)..(t.alongM - 8.0) }
         val numbered = crossings + t.at
         return JunctionInfo(t.at, if (line.size >= 2) line else listOf(here, t.at), if (numbered.size >= 2) numbered else emptyList(),
             if (numbered.size >= 2) numbered.size else null, t.street)
@@ -202,10 +202,11 @@ fun JunctionMap(now: Long, info: JunctionInfo, preset: String, here0: LL, headin
         // always seen from above (no tilt, no distortion): the middle between you and the turn, the way to the turn up, zoomed so
         // both fit with some street around them
         val d = dist(here, info.turnAt).coerceAtLeast(20.0)
-        val look = LL((here.lat + info.turnAt.lat) / 2, (here.lon + info.turnAt.lon) / 2)
+        // you near the bottom of the map (88%), the turn near its top (20%), so neither hides under the edges or the sign
+        val look = LL(here.lat + (info.turnAt.lat - here.lat) * 0.56, here.lon + (info.turnAt.lon - here.lon) * 0.56)
         val brg = if (d > 15.0) bearing(here, info.turnAt) else (heading ?: 0.0)
         val hDp = (mv.height / mv.resources.displayMetrics.density).coerceAtLeast(150f)
-        val mpp = (d + 70.0) / (hDp * 0.85)
+        val mpp = d / (hDp * 0.68)
         val zoom = (ln(40_075_016.686 * cos(Math.toRadians(here.lat)) / (512.0 * mpp)) / ln(2.0)).coerceIn(14.5, 18.6)
         val cam = CameraOptions.Builder().center(pt(look)).zoom(zoom).pitch(0.0).bearing(brg).build()
         try { mv.mapboxMap.easeTo(cam, MapAnimationOptions.mapAnimationOptions { duration(if (first) 1800L else 950L) }) } catch (e: Throwable) { }
