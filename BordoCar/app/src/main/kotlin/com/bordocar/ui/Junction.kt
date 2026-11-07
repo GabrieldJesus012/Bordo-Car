@@ -121,8 +121,8 @@ private fun styleJson(preset: String) = org.json.JSONObject()
 
 /**
  * The Mapbox map of the next turn, seen from above (the map turns so the way you're going is up): your position, the route in
- * blue, the bit of the turn in white, and the streets on that side numbered, the one to take in yellow. It comes in from a tilted
- * view, like Horizon Nav, then flattens out over the junction and follows you to it.
+ * blue, the bit of the turn in white, and the streets on that side numbered, the one to take in yellow. Always seen from above,
+ * following you to the turn.
  */
 @Composable
 fun JunctionMap(now: Long, info: JunctionInfo, preset: String, here0: LL, heading: Double?, modifier: Modifier, textureView: Boolean = false) {
@@ -134,7 +134,7 @@ fun JunctionMap(now: Long, info: JunctionInfo, preset: String, here0: LL, headin
     AndroidView(factory = { c ->
         try { MapboxOptions.accessToken = token } catch (e: Throwable) { }
         val mv = MapView(c, MapInitOptions(c, textureView = textureView, styleUri = null,
-            cameraOptions = CameraOptions.Builder().center(pt(here0)).zoom(15.2).pitch(60.0).bearing(heading ?: 0.0).build()))
+            cameraOptions = CameraOptions.Builder().center(pt(here0)).zoom(15.6).pitch(0.0).bearing(heading ?: 0.0).build()))
         try { mv.scalebar.enabled = false } catch (e: Throwable) { }
         try { mv.compass.enabled = false } catch (e: Throwable) { }
         try { mv.gestures.updateSettings { scrollEnabled = false; rotateEnabled = false; pitchEnabled = false; pinchToZoomEnabled = false; doubleTapToZoomInEnabled = false } } catch (e: Throwable) { }
@@ -154,7 +154,7 @@ fun JunctionMap(now: Long, info: JunctionInfo, preset: String, here0: LL, headin
                     try { st.addStyleImage("jr-arrowhead", 1f, arrowHead().toMapboxImage(), false, emptyList(), emptyList(), null) } catch (e: Throwable) { }
                     st.addLayer(LineLayer("jr-turn-case", "jr-turn").lineColor("#0B1430").lineWidth(20.0).lineCap(LineCap.BUTT).lineJoin(LineJoin.ROUND).lineEmissiveStrength(1.0))
                     st.addLayer(LineLayer("jr-turn-line", "jr-turn").lineColor("#FFFFFF").lineWidth(14.0).lineCap(LineCap.BUTT).lineJoin(LineJoin.ROUND).lineEmissiveStrength(1.0))
-                    st.addLayer(SymbolLayer("jr-arrow-s", "jr-arrow").iconImage("jr-arrowhead").iconSize(1.0).iconRotate(Expression.get("b"))
+                    st.addLayer(SymbolLayer("jr-arrow-s", "jr-arrow").iconImage("jr-arrowhead").iconSize(0.42).iconRotate(Expression.get("b"))
                         .iconRotationAlignment(IconRotationAlignment.MAP).iconPitchAlignment(IconPitchAlignment.MAP).iconAllowOverlap(true).iconIgnorePlacement(true))
                     st.addLayer(CircleLayer("jr-num-c", "jr-num").circlePitchScale(CirclePitchScale.VIEWPORT).circlePitchAlignment(CirclePitchAlignment.VIEWPORT).circleRadius(12.0).circleColor("#151B27").circleStrokeColor("#FFFFFF").circleStrokeWidth(2.0).circleEmissiveStrength(1.0))
                     st.addLayer(SymbolLayer("jr-num-t", "jr-num").textField(Expression.get("n")).textSize(14.0).textPitchAlignment(TextPitchAlignment.VIEWPORT).textColor("#FFFFFF")
@@ -197,21 +197,17 @@ fun JunctionMap(now: Long, info: JunctionInfo, preset: String, here0: LL, headin
             st.getSourceAs<GeoJsonSource>("jr-hi")?.featureCollection(if (nums.isNotEmpty()) pointsFc(listOf(nums.last()), nums.size) else pointsFc(emptyList()))
             st.getSourceAs<GeoJsonSource>("jr-me")?.featureCollection(pointsFc(listOf(here)))
         } catch (e: Throwable) { }
-        // seen from above: the middle between you and the turn, turned so the way to the turn is up, zoomed to fit both
         // far from the turn: tilted, looking down the road at it (like the drawing); close to it (under ~80 m) the camera rises
         // and looks straight down on the junction
+        // always seen from above (no tilt, no distortion): the middle between you and the turn, the way to the turn up, zoomed so
+        // both fit with some street around them
         val d = dist(here, info.turnAt).coerceAtLeast(20.0)
-        val tilt = ((d - 80.0) / (280.0 - 80.0)).coerceIn(0.0, 1.0)
-        val pitch = 55.0 * tilt
-        // the camera looks at a point just before the turn (closer to the turn while tilted), so the turn sits in the middle of the
-        // map and not up at its horizon
-        val f = 0.5 - 0.3 * tilt
-        val look = LL(info.turnAt.lat + (here.lat - info.turnAt.lat) * f, info.turnAt.lon + (here.lon - info.turnAt.lon) * f)
+        val look = LL((here.lat + info.turnAt.lat) / 2, (here.lon + info.turnAt.lon) / 2)
         val brg = if (d > 15.0) bearing(here, info.turnAt) else (heading ?: 0.0)
         val hDp = (mv.height / mv.resources.displayMetrics.density).coerceAtLeast(150f)
-        val mpp = (d * (1.0 - f) * 2.0).coerceAtLeast(60.0) / (hDp * (0.9 + 0.6 * tilt))
-        val zoom = (ln(40_075_016.686 * cos(Math.toRadians(here.lat)) / (512.0 * mpp)) / ln(2.0)).coerceIn(15.0, 18.6)
-        val cam = CameraOptions.Builder().center(pt(look)).zoom(zoom).pitch(pitch).bearing(brg).build()
+        val mpp = (d + 70.0) / (hDp * 0.85)
+        val zoom = (ln(40_075_016.686 * cos(Math.toRadians(here.lat)) / (512.0 * mpp)) / ln(2.0)).coerceIn(14.5, 18.6)
+        val cam = CameraOptions.Builder().center(pt(look)).zoom(zoom).pitch(0.0).bearing(brg).build()
         try { mv.mapboxMap.easeTo(cam, MapAnimationOptions.mapAnimationOptions { duration(if (first) 1800L else 950L) }) } catch (e: Throwable) { }
         first = false
     }
