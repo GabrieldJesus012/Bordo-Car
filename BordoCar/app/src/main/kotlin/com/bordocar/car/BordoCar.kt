@@ -244,7 +244,7 @@ class PreviewsScreen(carContext: CarContext) : Screen(carContext) {
     override fun onGetTemplate(): Template {
         val list = ItemList.Builder()
         list.addItem(Row.Builder().setTitle("Painel esportivo").addText("Mostra por 14 segundos")
-            .setOnClickListener { com.bordocar.ui.Sport.preview(); screenManager.popToRoot() }.build())
+            .setOnClickListener { com.bordocar.ui.Sport.preview(carContext); screenManager.popToRoot() }.build())
         list.addItem(Row.Builder().setTitle("Mapa da curva (modo Estrada)").addText("Anda por uma rota perto de você até a primeira curva, por 16 segundos")
             .setOnClickListener { com.bordocar.ui.JunctionPreview.start(carContext); screenManager.popToRoot() }.build())
         return ListTemplate.Builder().setTitle("Ver prévias").setHeaderAction(Action.BACK).setSingleList(list.build()).build()

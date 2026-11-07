@@ -20,7 +20,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.RoundaboutRight
+import androidx.compose.material.icons.rounded.Straight
+import androidx.compose.material.icons.rounded.TurnLeft
 import androidx.compose.material.icons.rounded.TurnRight
+import androidx.compose.material.icons.rounded.TurnSlightLeft
+import androidx.compose.material.icons.rounded.TurnSlightRight
+import androidx.compose.material.icons.rounded.UTurnLeft
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,6 +56,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bordocar.Drive
+import com.bordocar.MapRoute
 import com.bordocar.NavNotice
 import com.bordocar.NowPlaying
 import com.bordocar.Prefs
@@ -75,7 +82,14 @@ object Sport {
     private var loaded = false
     fun load(ctx: Context) { if (loaded) return; loaded = true; enabled = Prefs(ctx).b("sport", false) }
     fun set(ctx: Context, on: Boolean) { enabled = on; Prefs(ctx).put("sport", on) }
-    fun preview() { previewFrom = System.currentTimeMillis() }
+    /** Shows the preview; with [ctx], also asks for a route near you so the preview's turn shows on the map inside the circle. */
+    fun preview(ctx: Context? = null) {
+        if (ctx != null) try { JunctionPreview.prepare(ctx) } catch (e: Exception) { }
+        previewFrom = System.currentTimeMillis()
+    }
+    /** For how long the preview shows its sample turn (longer with the map, to see it come closer). */
+    const val SAMPLE_S = 7f
+    const val SAMPLE_MAP_S = 10f
     fun previewing(now: Long) = previewFrom > 0L && now - previewFrom in 0 until PREVIEW_MS
     /** Called once a second with the speed in km/h. */
     fun update(kmh: Int) {
@@ -111,11 +125,27 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
     val kmh = if (preview && real < Sport.ON_KMH) (72 + t * 2.8f).toInt() else real
     val hd = Drive.heading ?: if (preview) (40.0 + t * 6) else null
     val realRoute = NavNotice.active(now)
-    val sample = preview && !realRoute && t < Sport.PREVIEW_MS / 2000f
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val onCar = LocalOnCar.current
+    val mapOk = MapRoute.enabled(ctx)
+    val sample = preview && !realRoute && t < (if (mapOk) Sport.SAMPLE_MAP_S else Sport.SAMPLE_S)
     val route = realRoute || sample
-    val turnTitle = if (sample) "${(800 - t * 60).toInt().coerceAtLeast(100) / 10 * 10} m" else NavNotice.title
-    val turnText = if (sample) "Vire à direita · exemplo" else NavNotice.text
+    // (the preview with the map: a drive along a route near you up to its first turn)
+    val sim = if (sample && mapOk) JunctionPreview.simAt(t.toDouble()) else null
+    val turnTitle = if (sim != null) "${Math.round(sim.metres / 10.0) * 10} m" else if (sample) "${(800 - t * 60).toInt().coerceAtLeast(100) / 10 * 10} m" else NavNotice.title
+    val turnText = if (sim != null) sim.street else if (sample) "Vire à direita · exemplo" else NavNotice.text
     val turnSub = if (sample) "Chegada 18:05 · 21 km" else NavNotice.sub
+    // the map of the next turn inside the circle, once it's 500 m away or less
+    val here = sim?.here ?: Drive.pos
+    val mapHd = sim?.heading ?: Drive.heading
+    val (tDist, tRest) = NavNotice.split(turnTitle, turnText)
+    val jm = if (sim != null) sim.metres else tDist?.let { turnMetres(it) }
+    val jKind = if (sim != null) sim.kind else if (sample) "direita" else maneuver(NavNotice.title + " " + NavNotice.text)
+    if (here != null && realRoute && !preview) MapRoute.check(ctx.applicationContext, here)
+    if (here != null && realRoute && !preview && onCar && jm != null && jm <= 700.0)
+        MapRoute.requestNear(ctx.applicationContext, here, mapHd, jm, jKind, NavNotice.key + NavNotice.text)
+    val jinfo = if (mapOk && here != null && jm != null && jm <= 500.0 && ((realRoute && (onCar || preview)) || sim != null))
+        junctionInfo(here, jm, jKind, mapHd) else null
 
     Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color(0xFF2A1012), Color(0xFF0E0808), Color(0xFF060404)), center = Offset(750f, 0f), radius = 1900f))
         .drawBehind {
@@ -170,8 +200,12 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
                 Column(Modifier.weight(0.4f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
                     BoxWithConstraints(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                         val d = minOf(maxWidth, maxHeight)
-                        Ring(hd, route, Modifier.size(d))
-                        Column(Modifier.size(d * 0.7f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                        // close to the turn: the map seen from above in the middle of the circle (route in red), the ring around it
+                        if (jinfo != null && here != null) JunctionMap(now, jinfo, "night", here, mapHd,
+                            Modifier.size(d * HOLE).clip(androidx.compose.foundation.shape.CircleShape), textureView = true,
+                            carAt = 0.80, turnAt = 0.28, routeColor = "#FF4A3A", caseColor = "#7A1016")
+                        Ring(if (jinfo != null) mapHd else hd, route, Modifier.size(d), hole = jinfo != null)
+                        if (jinfo == null) Column(Modifier.size(d * 0.7f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             if (route) {
                                 val ic = if (sample) null else NavNotice.icon
                                 val isz = d.value * 0.26f
@@ -196,6 +230,7 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
                 // the route, this trip and today side by side, the g-force
                 BoxWithConstraints(Modifier.weight(0.3f).fillMaxHeight().padding(end = 12.dp)) {
                     val gsz = (maxHeight.value * 0.48f).coerceAtMost(maxWidth.value * 0.7f)
+                    val g2 = minOf(maxHeight.value * 0.4f, maxWidth.value * 0.36f)
                     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.End) {
                         if (route && turnSub.isNotBlank()) Stat("ROTA", turnSub, null, small = true)
                         val cur = Drive.current()
@@ -205,15 +240,80 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
                             Stat("ESTA VIAGEM", km(tripKm), if (tripMin > 0) (if (tripMin < 60) "$tripMin min" else "${tripMin / 60}h ${"%02d".format(tripMin % 60)}") else null)
                             Stat("KM HOJE", km(if (preview && cur == null) 16.7 else Drive.today().first / 1000.0), null)
                         }
-                        Spacer(Modifier.weight(1f))
                         val gx = if (preview) (kotlin.math.sin(now / 900.0) * 0.3).toFloat() else Drive.gLat
                         val gy = if (preview) (kotlin.math.cos(now / 1300.0) * 0.2).toFloat() else Drive.gLon
-                        GMeter(gx, gy, Modifier.size(gsz.dp))
+                        if (jinfo != null) {
+                            // the map's turn: the arrow of where to turn and its caption, next to a smaller g-force
+                            val side = when (jKind) { "direita", "leve-direita" -> "direita"; "esquerda", "leve-esquerda" -> "esquerda"; else -> null }
+                            val title = when {
+                                jinfo.nth != null && side != null -> "${jinfo.nth}ª à $side"
+                                jKind == "direita" -> "Vire à direita"
+                                jKind == "esquerda" -> "Vire à esquerda"
+                                jKind == "leve-direita" -> "Leve à direita"
+                                jKind == "leve-esquerda" -> "Leve à esquerda"
+                                jKind == "retorno" -> "Faça o retorno"
+                                jKind == "rotatoria" -> "Rotatória"
+                                jKind == "frente" -> "Siga em frente"
+                                else -> tRest
+                            }
+                            val street = jinfo.street.ifBlank { if (title != tRest) tRest else "" }
+                            Row(Modifier.fillMaxWidth().weight(1f).padding(top = 8.dp), verticalAlignment = Alignment.Bottom) {
+                                TurnBlock(jKind, if (sim != null || sample) null else NavNotice.icon, title, tDist, street,
+                                    Modifier.weight(1f).fillMaxHeight().padding(end = 10.dp))
+                                GMeter(gx, gy, Modifier.size(g2.dp))
+                            }
+                        } else {
+                            Spacer(Modifier.weight(1f))
+                            GMeter(gx, gy, Modifier.size(gsz.dp))
+                        }
                     }
                 }
             }
         }
     }
+}
+
+/** How much of the circle the map of the turn takes (its diameter, as a part of the circle's). */
+private const val HOLE = 0.74f
+
+/** The turn of the map: the arrow of where to turn in a red square, "3ª à esquerda", the distance and the street. */
+@Composable
+private fun TurnBlock(kind: String?, icon: android.graphics.Bitmap?, title: String, dist: String?, street: String, modifier: Modifier) {
+    BoxWithConstraints(modifier) {
+        val w = maxWidth.value
+        val box = minOf(w * 0.45f, maxHeight.value * 0.42f, 90f).coerceAtLeast(36f)
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
+            Box(Modifier.size(box.dp).clip(RoundedCornerShape((box * 0.2f).dp)).background(Red), contentAlignment = Alignment.Center) {
+                val iv = turnIcon(kind)
+                if (iv == null && icon != null) Image(icon.asImageBitmap(), null, colorFilter = ColorFilter.tint(Color.White), modifier = Modifier.size((box * 0.78f).dp))
+                else Icon(iv ?: Icons.Rounded.TurnRight, null, tint = Color.White, modifier = Modifier.size((box * 0.8f).dp))
+            }
+            val tf = (w * 0.12f).coerceIn(15f, 30f)
+            androidx.compose.runtime.key(title) {
+                Text(title, color = Color.White, fontSize = tf.sp, lineHeight = (tf * 1.1f).sp, fontWeight = FontWeight.ExtraBold, fontStyle = FontStyle.Italic,
+                    maxLines = 1, modifier = Modifier.padding(top = 6.dp).basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2000, repeatDelayMillis = 2000, velocity = 40.dp))
+            }
+            if (dist != null) {
+                val df = (w * 0.16f).coerceIn(18f, 40f)
+                Text(dist, color = Orange, fontSize = df.sp, lineHeight = (df * 1.05f).sp, fontWeight = FontWeight.ExtraBold, fontStyle = FontStyle.Italic, maxLines = 1)
+            }
+            if (street.isNotBlank()) androidx.compose.runtime.key(street) {
+                Text(street, color = Color(0xFFFFD0C8), fontSize = (w * 0.065f).coerceIn(12f, 16f).sp, maxLines = 1,
+                    modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2000, repeatDelayMillis = 2000, velocity = 40.dp))
+            }
+        }
+    }
+}
+
+private fun turnIcon(kind: String?): androidx.compose.ui.graphics.vector.ImageVector? = when (kind) {
+    "direita" -> Icons.Rounded.TurnRight
+    "esquerda" -> Icons.Rounded.TurnLeft
+    "leve-direita" -> Icons.Rounded.TurnSlightRight
+    "leve-esquerda" -> Icons.Rounded.TurnSlightLeft
+    "retorno" -> Icons.Rounded.UTurnLeft
+    "rotatoria" -> Icons.Rounded.RoundaboutRight
+    "frente" -> Icons.Rounded.Straight
+    else -> null
 }
 
 /** The g-force: the dot goes to the side of the turn, up when braking and down when speeding up (full circle = 0,5 G). */
@@ -297,11 +397,17 @@ private fun Leds(kmh: Int, over: Boolean, blinkOn: Boolean, modifier: Modifier) 
 
 /** The compass ring: N at the top, the red marker on the ring is the way you're going; red inside while there's a route. */
 @Composable
-private fun Ring(hd: Double?, route: Boolean, modifier: Modifier) {
+private fun Ring(hd: Double?, route: Boolean, modifier: Modifier, hole: Boolean = false) {
     val m = androidx.compose.ui.text.rememberTextMeasurer()
     Canvas(modifier) {
         val r = size.minDimension / 2f
         val c = Offset(size.width / 2f, size.height / 2f)
+        if (hole) {
+            // the map shows in the middle: only the band of the ring is filled (it also covers the map's corners), with a dark edge
+            val hr = r * HOLE
+            drawCircle(Color(0xFF1A0A0C), (hr + r * 0.97f) / 2f, c, style = Stroke(r * 0.97f - hr + 2f))
+            drawCircle(Color.Black.copy(alpha = 0.55f), hr + r * 0.015f, c, style = Stroke(r * 0.04f))
+        } else
         drawCircle(Brush.radialGradient(if (route) listOf(Color(0xFF7A1016), Color(0xFF1A0A0C)) else listOf(Color(0xFF1A1B20), Color(0xFF0C0C0E)), c, r), r * 0.97f, c)
         drawCircle(if (route) Red else Color(0xFF2B2B31), r * 0.97f, c, style = Stroke(r * 0.018f))
         for (i in 0 until 36) {
@@ -313,7 +419,7 @@ private fun Ring(hd: Double?, route: Boolean, modifier: Modifier) {
                 Offset(c.x + (r1 * Math.sin(a)).toFloat(), c.y - (r1 * Math.cos(a)).toFloat()), strokeWidth = if (major) r * 0.016f else r * 0.008f)
         }
         val fs = (r * 0.11f).coerceAtLeast(10f)
-        for ((t, deg) in listOf("N" to 0.0, "L" to 90.0, "S" to 180.0, "O" to 270.0)) {
+        if (!hole) for ((t, deg) in listOf("N" to 0.0, "L" to 90.0, "S" to 180.0, "O" to 270.0)) {
             val a = Math.toRadians(deg)
             val lay = m.measure(t, androidx.compose.ui.text.TextStyle(color = if (t == "N") Orange else Grey, fontSize = (fs / density).sp, fontWeight = FontWeight.Bold))
             drawText(lay, topLeft = Offset(c.x + (r * 0.69f * Math.sin(a)).toFloat() - lay.size.width / 2f, c.y - (r * 0.69f * Math.cos(a)).toFloat() - lay.size.height / 2f))

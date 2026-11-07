@@ -231,7 +231,7 @@ class MainActivity : ComponentActivity() {
                     }
                     androidx.compose.material3.Switch(on, { com.bordocar.ui.Sport.set(this@MainActivity, it) })
                 }
-                Box(Modifier.padding(top = 8.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF0F1830)).clickable { com.bordocar.ui.Sport.preview(); scope.launch { scroll.animateScrollTo(0) } }
+                Box(Modifier.padding(top = 8.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF0F1830)).clickable { com.bordocar.ui.Sport.preview(this@MainActivity); scope.launch { scroll.animateScrollTo(0) } }
                     .padding(horizontal = 16.dp, vertical = 9.dp)) { Text("Ver prévia (14 s)", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
                 Text("A prévia aparece no painel aqui em cima e na tela do carro, se estiver conectado.", color = Sub, fontSize = 12.sp)
             }

@@ -1012,7 +1012,7 @@ private fun Timeline(now: Long, navigating: Boolean, a: Arrival?, doneM: Double,
     }
 }
 
-private fun turnMetres(s: String): Double? {
+internal fun turnMetres(s: String): Double? {
     val m = Regex("(\\d+(?:[.,]\\d+)?)\\s*(km|m)", RegexOption.IGNORE_CASE).find(s) ?: return null
     val v = m.groupValues[1].replace(",", ".").toDoubleOrNull() ?: return null
     return if (m.groupValues[2].lowercase() == "km") v * 1000.0 else v
@@ -1093,7 +1093,7 @@ private fun skyAt(now: Long, pos: LL?): Sky {
 }
 
 /** Which manoeuvre the navigation notice speaks of (Portuguese / English), or null when it's not clear. */
-private fun maneuver(s0: String): String? {
+internal fun maneuver(s0: String): String? {
     val s = s0.lowercase()
     return when {
         "retorno" in s || "u-turn" in s || "make a u" in s -> "retorno"
