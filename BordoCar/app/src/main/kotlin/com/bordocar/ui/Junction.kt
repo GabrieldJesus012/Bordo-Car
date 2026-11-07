@@ -133,7 +133,8 @@ fun JunctionMap(now: Long, info: JunctionInfo, preset: String, here0: LL, headin
         try { mv.compass.enabled = false } catch (e: Throwable) { }
         try { mv.gestures.updateSettings { scrollEnabled = false; rotateEnabled = false; pitchEnabled = false; pinchToZoomEnabled = false; doubleTapToZoomInEnabled = false } } catch (e: Throwable) { }
         try {
-            mv.mapboxMap.loadStyle(styleJson(preset)) { st ->
+            // always the night map (it sits under the sky of the hour)
+            mv.mapboxMap.loadStyle(styleJson("night")) { st ->
                 try {
                     st.addSource(GeoJsonSource.Builder("jr-route").featureCollection(lineFc(emptyList())).build())
                     st.addSource(GeoJsonSource.Builder("jr-turn").featureCollection(lineFc(emptyList())).build())
@@ -178,13 +179,17 @@ fun JunctionMap(now: Long, info: JunctionInfo, preset: String, here0: LL, headin
             st.getSourceAs<GeoJsonSource>("jr-me")?.featureCollection(pointsFc(listOf(here)))
         } catch (e: Throwable) { }
         // seen from above: the middle between you and the turn, turned so the way to the turn is up, zoomed to fit both
-        val d = dist(here, info.turnAt).coerceAtLeast(40.0)
-        val mid = LL((here.lat + info.turnAt.lat) / 2, (here.lon + info.turnAt.lon) / 2)
+        // far from the turn: tilted, looking down the road at it (like the drawing); close to it (under ~80 m) the camera rises
+        // and looks straight down on the junction
+        val d = dist(here, info.turnAt).coerceAtLeast(30.0)
+        val tilt = ((d - 80.0) / (260.0 - 80.0)).coerceIn(0.0, 1.0)
+        val pitch = 62.0 * tilt
+        val mid = LL(here.lat + (info.turnAt.lat - here.lat) * 0.5, here.lon + (info.turnAt.lon - here.lon) * 0.5)
         val brg = if (d > 15.0) bearing(here, info.turnAt) else (heading ?: 0.0)
-        val hDp = (mv.height / mv.resources.displayMetrics.density).coerceAtLeast(200f)
-        val mpp = d / (hDp * 0.42)
-        val zoom = (ln(40_075_016.686 * cos(Math.toRadians(here.lat)) / (512.0 * mpp)) / ln(2.0)).coerceIn(14.0, 18.6)
-        val cam = CameraOptions.Builder().center(pt(mid)).zoom(zoom).pitch(0.0).bearing(brg).build()
+        val hDp = (mv.height / mv.resources.displayMetrics.density).coerceAtLeast(150f)
+        val mpp = d / (hDp * (0.55 + 0.5 * tilt))
+        val zoom = (ln(40_075_016.686 * cos(Math.toRadians(here.lat)) / (512.0 * mpp)) / ln(2.0)).coerceIn(14.5, 18.8)
+        val cam = CameraOptions.Builder().center(pt(mid)).zoom(zoom).pitch(pitch).bearing(brg).build()
         try { mv.mapboxMap.easeTo(cam, MapAnimationOptions.mapAnimationOptions { duration(if (first) 1800L else 950L) }) } catch (e: Throwable) { }
         first = false
     }

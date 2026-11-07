@@ -27,6 +27,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Straight
+import androidx.compose.material.icons.rounded.UTurnLeft
+import androidx.compose.material.icons.rounded.TurnSlightLeft
+import androidx.compose.material.icons.rounded.TurnSlightRight
+import androidx.compose.material.icons.rounded.TurnLeft
+import androidx.compose.material.icons.rounded.TurnRight
 import androidx.compose.material.icons.rounded.North
 import androidx.compose.material.icons.rounded.SportsScore
 import androidx.compose.material.icons.rounded.DirectionsCar
@@ -842,8 +848,15 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
             MapRoute.requestNear(jctx.applicationContext, here, hd, jm, kindNow, NavNotice.key + NavNotice.text)
         val jinfo = if (navigating && (onCar || pv) && here != null && jm != null && jm <= 500.0 && MapRoute.enabled(jctx))
             junctionInfo(here, jm, kindNow, hd) else null
-        if (jinfo != null && here != null) JunctionMap(now, jinfo, sky.preset, here, hd, Modifier.fillMaxSize(), textureView = !onCar)
-        else Highway(navigating && !pv, now, Modifier.fillMaxSize())
+        if (jinfo != null && here != null) {
+            // like the drawing: the sky of the hour on top (the sign and the numbers sit there, never over the turn), the night map
+            // below the horizon, tilted while the turn is far
+            Highway(false, now, Modifier.fillMaxSize())
+            Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.58f)) {
+                JunctionMap(now, jinfo, sky.preset, here, hd, Modifier.fillMaxSize(), textureView = !onCar)
+                Box(Modifier.fillMaxWidth().height(36.dp).background(Brush.verticalGradient(listOf(sky.colors.last().copy(alpha = 0.85f), Color.Transparent))))
+            }
+        } else Highway(navigating && !pv, now, Modifier.fillMaxSize())
         if (pv) Text("PRÉVIA", color = Color(0xFF1A0A0A), fontSize = 13.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = padB + 10.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFFFFC24E)).padding(horizontal = 8.dp, vertical = 2.dp))
         Box(Modifier.fillMaxWidth().height(padT + 90.dp).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.35f), Color.Transparent))))
@@ -946,7 +959,12 @@ private fun RoadSign(navigating: Boolean, dist: String?, rest: String, wx: Weath
             val isz = (h * 0.15f).coerceIn(30f, 60f)
             val ic = if (navigating) NavNotice.icon else null
             if (ic != null) Image(ic.asImageBitmap(), null, colorFilter = ColorFilter.tint(Color.White), modifier = Modifier.size(isz.dp))
-            else Icon(if (navigating) Icons.Rounded.Navigation else Icons.Rounded.North, null, tint = Color.White, modifier = Modifier.size(isz.dp))
+            else Icon(when (kind) {
+                    "direita" -> Icons.Rounded.TurnRight; "esquerda" -> Icons.Rounded.TurnLeft
+                    "leve-direita" -> Icons.Rounded.TurnSlightRight; "leve-esquerda" -> Icons.Rounded.TurnSlightLeft
+                    "retorno" -> Icons.Rounded.UTurnLeft; "frente" -> Icons.Rounded.Straight
+                    else -> if (navigating) Icons.Rounded.Navigation else Icons.Rounded.North
+                }, null, tint = Color.White, modifier = Modifier.size(isz.dp))
             Column(Modifier.padding(start = 12.dp)) {
                 val top: String; val bottom: String
                 if (!navigating) {
