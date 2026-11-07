@@ -51,7 +51,9 @@ import kotlin.math.ln
 import kotlin.math.sin
 
 /** What the map of the next turn shows: the turn, the route line around it, the streets to count, and which one it is. */
-class JunctionInfo(val turnAt: LL, val line: List<LL>, val numbered: List<LL>, val nth: Int?, val street: String)
+class JunctionInfo(val turnAt: LL, val line: List<LL>, val numbered: List<LL>, val nth: Int?, val street: String,
+                   /** You, put on the route (the GPS wobbles a few metres), and the way the route goes there. */
+                   val me: LL, val roadBrg: Double?)
 
 private fun ahead(p: LL, deg: Double, m: Double) = MapRoute.ahead(p, deg, m)
 
@@ -96,23 +98,20 @@ object JunctionPreview {
 }
 
 /**
- * Works out the turn: on Mapbox's route when there is one (exact, with the streets to count), otherwise straight ahead at the
- * distance of the navigation notice.
+ * Works out the turn on Mapbox's route (the real streets, with the ones to count). Null while there's no route that fits the
+ * notice: then the map isn't shown (a turn guessed straight ahead floated off the streets).
  */
-fun junctionInfo(here: LL, metres: Double, kind: String?, heading: Double?, forced: MapRoute.Turn? = null): JunctionInfo {
-    val t = forced ?: MapRoute.next(here, metres, kind)
-    if (t != null) {
-        val pos = MapRoute.position(here).first
-        val line = MapRoute.slice(pos - 30.0, t.alongM + 120.0)
-        val crossings = t.sideStreets.filter { MapRoute.position(it).first in (pos + 15.0)..(t.alongM - 8.0) }
-        val numbered = crossings + t.at
-        return JunctionInfo(t.at, if (line.size >= 2) line else listOf(here, t.at), if (numbered.size >= 2) numbered else emptyList(),
-            if (numbered.size >= 2) numbered.size else null, t.street)
-    }
-    val hd = heading ?: 0.0
-    val at = ahead(here, hd, metres)
-    val turnDeg = when (kind) { "direita" -> 90.0; "leve-direita" -> 40.0; "esquerda" -> -90.0; "leve-esquerda" -> -40.0; "retorno" -> 180.0; else -> 0.0 }
-    return JunctionInfo(at, listOf(here, at, ahead(at, hd + turnDeg, 70.0)), emptyList(), null, "")
+fun junctionInfo(here: LL, metres: Double, kind: String?, heading: Double?, forced: MapRoute.Turn? = null): JunctionInfo? {
+    val t = forced ?: MapRoute.next(here, metres, kind) ?: return null
+    val (pos, off) = MapRoute.position(here)
+    val line = MapRoute.slice(pos - 30.0, t.alongM + 120.0)
+    if (line.size < 2) return null
+    val crossings = t.sideStreets.filter { MapRoute.position(it).first in (pos + 15.0)..(t.alongM - 8.0) }
+    val numbered = crossings + t.at
+    val onRoad = MapRoute.pointAt(pos)
+    val me = if (onRoad != null && off < 35.0) onRoad.first else here
+    return JunctionInfo(t.at, line, if (numbered.size >= 2) numbered else emptyList(), if (numbered.size >= 2) numbered.size else null, t.street,
+        me, onRoad?.second ?: heading)
 }
 
 private fun pt(p: LL) = Point.fromLngLat(p.lon, p.lat)
@@ -184,11 +183,15 @@ fun JunctionMap(now: Long, info: JunctionInfo, preset: String, here0: LL, headin
     }, modifier = modifier)
     DisposableEffect(Unit) { onDispose { try { view?.onStop(); view?.onDestroy() } catch (e: Throwable) { } } }
 
-    // follows you each second: the data on the map, and the camera between you and the turn
-    LaunchedEffect(style, now / 500L, info) {
+    // follows you each second: the data on the map, and the camera between you and the turn (once a second, one smooth move each
+    // time, so the map doesn't keep starting over and wobbling)
+    val latest by androidx.compose.runtime.rememberUpdatedState(info)
+    LaunchedEffect(style, now / 1000L) {
         val st = style ?: return@LaunchedEffect
         val mv = view ?: return@LaunchedEffect
-        val here = here0
+        val info = latest
+        val here = info.me
+        val hdg = info.roadBrg ?: heading
         try {
             st.getSourceAs<GeoJsonSource>("jr-route")?.featureCollection(lineFc(info.line))
             // the white stretch of the turn itself: from 25 m before to 40 m after it
@@ -217,9 +220,9 @@ fun JunctionMap(now: Long, info: JunctionInfo, preset: String, here0: LL, headin
         val span = (carAt - turnAt).coerceAtLeast(0.2)
         // at the turn or past it (it's behind you): the map just follows the way you're going
         val toTurn = bearing(here, info.turnAt)
-        val behind = heading != null && Math.abs(((heading - toTurn + 540.0) % 360.0) - 180.0) > 100.0
+        val behind = hdg != null && Math.abs(((hdg - toTurn + 540.0) % 360.0) - 180.0) > 100.0
         val near = d < 25.0 || behind
-        val brg = if (!near) toTurn else (heading ?: toTurn)
+        val brg = if (!near) toTurn else (hdg ?: toTurn)
         val hDp = (mv.height / mv.resources.displayMetrics.density).coerceAtLeast(if (roundBrand) 80f else 150f)
         val mpp = (if (near) maxOf(60.0, minSpanM) else d.coerceAtLeast(minSpanM)) / (hDp * span)
         val look = MapRoute.ahead(here, brg, (carAt - 0.5) * hDp * mpp)
@@ -232,7 +235,7 @@ fun JunctionMap(now: Long, info: JunctionInfo, preset: String, here0: LL, headin
             try { mv.attribution.updateSettings { position = android.view.Gravity.BOTTOM or android.view.Gravity.CENTER_HORIZONTAL; marginBottom = mv.height * 0.07f; marginLeft = 46f * px; marginRight = 0f } } catch (e: Throwable) { }
         }
         val cam = CameraOptions.Builder().center(pt(look)).zoom(zoom).pitch(0.0).bearing(brg).build()
-        try { mv.mapboxMap.easeTo(cam, MapAnimationOptions.mapAnimationOptions { duration(if (first) 1800L else 950L) }) } catch (e: Throwable) { }
+        try { mv.mapboxMap.easeTo(cam, MapAnimationOptions.mapAnimationOptions { duration(if (first) 1800L else 1000L); interpolator(android.view.animation.LinearInterpolator()) }) } catch (e: Throwable) { }
         first = false
     }
 }
