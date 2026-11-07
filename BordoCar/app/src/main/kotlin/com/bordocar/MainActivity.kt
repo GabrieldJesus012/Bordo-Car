@@ -12,6 +12,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -65,6 +66,12 @@ class MainActivity : ComponentActivity() {
     private var refresh = mutableIntStateOf(0)
     /** Choosing a place: for Casa / Trabalho ([key]) or a new favourite (key null). */
     private class Pick(val key: String?, val label: String)
+    private val GO = "__go"
+    /** Starts the route to [p] in Waze / Google Maps from the phone. */
+    private fun go(p: Place) {
+        val app = com.bordocar.car.startRouteFromPhone(this, p.target, Drive.pos ?: lastKnown())
+        android.widget.Toast.makeText(this, if (app != null) "Abrindo no $app…" else "Não achei o Waze nem o Google Maps", android.widget.Toast.LENGTH_SHORT).show()
+    }
     private var picking by mutableStateOf<Pick?>(null)
     /** The trips shown on the map (Viagens), and its title. */
     private var mapTrips by mutableStateOf<List<Trip>?>(null)
@@ -151,6 +158,20 @@ class MainActivity : ComponentActivity() {
             if (tab == 2) { FuelTab(); return@Column }
             ParkingCard()
             Text("O painel do carro no Android Auto. A navegação fica com o Waze ou o Google Maps.", color = Sub, fontSize = 14.sp)
+
+            // start a route here and Bordo Car knows where it goes (arrival, the map of the turn counting the streets)
+            Section("Para onde?") {
+                val places = listOfNotNull(Places.slot(this@MainActivity, "casa")?.copy(name = "🏠 Casa"), Places.slot(this@MainActivity, "trabalho")?.copy(name = "💼 Trabalho")) +
+                    Places.favourites(this@MainActivity).map { it.copy(name = "★ " + it.name) }
+                if (places.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (p in places) Box(Modifier.clip(RoundedCornerShape(10.dp)).background(Color(0xFF0F1830)).clickable { go(p) }.padding(horizontal = 14.dp, vertical = 9.dp)) {
+                        Text(p.name, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    }
+                }
+                Button("🔍 Buscar um lugar") { picking = Pick(GO, "Para onde?") }
+                Text("Abre a rota no ${if (prefs.s("navapp", "waze") == "maps") "Google Maps" else "Waze"} (o escolhido em Navegar com) e o painel já sabe o destino: " +
+                    "a chegada e o mapa da curva contando as ruas.", color = Sub, fontSize = 12.sp)
+            }
 
             // a live preview of the car screen
             Section("Prévia do painel") {
@@ -551,6 +572,7 @@ class MainActivity : ComponentActivity() {
         var results by remember { mutableStateOf<List<Place>?>(null) }
         val scope = androidx.compose.runtime.rememberCoroutineScope()
         fun keep(p: Place) {
+            if (pk.key == GO) { done(); go(p); return }
             if (pk.key != null) Places.setSlot(this@MainActivity, pk.key, p.copy(name = pk.label))
             else Places.addFavourite(this@MainActivity, p.copy(name = name.trim().ifBlank { p.name }))
             done()
@@ -568,7 +590,7 @@ class MainActivity : ComponentActivity() {
         androidx.activity.compose.BackHandler { done() }
         Column(Modifier.fillMaxSize().background(Bg).systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(if (pk.key != null) "Escolher ${pk.label}" else "Novo favorito", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+                Text(if (pk.key == GO) pk.label else if (pk.key != null) "Escolher ${pk.label}" else "Novo favorito", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
                 Text("Cancelar", color = Accent, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { done() }.padding(8.dp))
             }
             if (pk.key == null) OutlinedTextField(name, { name = it }, label = { Text("Nome (ex.: Academia, Mãe)") }, singleLine = true, modifier = Modifier.fillMaxWidth(), colors = fieldColors)
@@ -577,7 +599,7 @@ class MainActivity : ComponentActivity() {
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { search() }))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(if (busy) "Buscando…" else "Buscar") { search() }
-                Button("Usar onde estou agora") {
+                if (pk.key != GO) Button("Usar onde estou agora") {
                     val here = Drive.pos ?: lastKnown()
                     if (here != null) scope.launch {
                         val p = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Places.here(this@MainActivity, here) }

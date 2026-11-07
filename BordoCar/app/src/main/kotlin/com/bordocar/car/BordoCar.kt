@@ -61,14 +61,7 @@ class BordoCarService : CarAppService() {
 fun navigateTo(car: CarContext, q: String) {
     val ll = q.trim().replace(" ", "")
     val uri = if (Regex("^-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?$").matches(ll)) "geo:$ll?q=$ll" else "geo:0,0?q=" + Uri.encode(q.trim())
-    // remember the destination (when it's a point) to show how much is left even when the app doesn't say it (Waze)
-    Regex("^(-?\\d+(?:\\.\\d+)?),(-?\\d+(?:\\.\\d+)?)$").find(ll)?.let { m ->
-        val t = com.bordocar.LL(m.groupValues[1].toDouble(), m.groupValues[2].toDouble())
-        com.bordocar.NavNotice.target = t; com.bordocar.NavNotice.targetAt = System.currentTimeMillis()
-        com.bordocar.NavNotice.targetFromM = com.bordocar.Drive.pos?.let { com.bordocar.dist(it, t) } ?: 0.0
-        // the same route from Mapbox, to know where each turn is (the map of the turn in Estrada)
-        com.bordocar.MapRoute.request(car.applicationContext, com.bordocar.Drive.pos, t)
-    } ?: run { com.bordocar.NavNotice.target = null; com.bordocar.MapRoute.clear() }
+    rememberTarget(car.applicationContext, ll, com.bordocar.Drive.pos)
     val pm = car.packageManager
     fun has(p: String) = try { pm.getPackageInfo(p, 0); true } catch (e: Exception) { false }
     val choice = Prefs(car).s("navapp", "waze")
@@ -97,6 +90,44 @@ fun navigateTo(car: CarContext, q: String) {
         navNote = "não abriu: ${e.message ?: e.javaClass.simpleName}"
         try { CarToast.makeText(car, "Não consegui abrir o Waze ou o Google Maps", CarToast.LENGTH_LONG).show() } catch (x: Exception) { }
     }
+}
+
+/**
+ * Remembers the destination (when it's a point) to show how much is left even when the app doesn't say it (Waze), and asks Mapbox
+ * for the same route, to know where each turn is (the map of the turn, counting the streets).
+ */
+private fun rememberTarget(ctx: android.content.Context, ll: String, from: com.bordocar.LL?) {
+    Regex("^(-?\\d+(?:\\.\\d+)?),(-?\\d+(?:\\.\\d+)?)$").find(ll)?.let { m ->
+        val t = com.bordocar.LL(m.groupValues[1].toDouble(), m.groupValues[2].toDouble())
+        com.bordocar.NavNotice.target = t; com.bordocar.NavNotice.targetAt = System.currentTimeMillis()
+        com.bordocar.NavNotice.targetFromM = from?.let { com.bordocar.dist(it, t) } ?: 0.0
+        com.bordocar.MapRoute.request(ctx, from, t)
+    } ?: run { com.bordocar.NavNotice.target = null; com.bordocar.MapRoute.clear() }
+}
+
+/**
+ * "Para onde?" on the phone: opens the route in the chosen app (Waze or Google Maps) and Bordo Car keeps the destination, the same
+ * as starting it from the car. [from]: where you are (the GPS of the phone when the car one isn't running). Returns the app's name,
+ * or null when neither opened.
+ */
+fun startRouteFromPhone(ctx: android.content.Context, q: String, from: com.bordocar.LL?): String? {
+    val ll = q.trim().replace(" ", "")
+    rememberTarget(ctx.applicationContext, ll, com.bordocar.Drive.pos ?: from)
+    val point = Regex("^-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?$").matches(ll)
+    val pm = ctx.packageManager
+    fun has(p: String) = try { pm.getPackageInfo(p, 0); true } catch (e: Exception) { false }
+    val order = (if (Prefs(ctx).s("navapp", "waze") == "maps") listOf("com.google.android.apps.maps", "com.waze") else listOf("com.waze", "com.google.android.apps.maps")).filter { has(it) }
+    val name = mapOf("com.waze" to "Waze", "com.google.android.apps.maps" to "Google Maps")
+    for (pkg in order) {
+        val link = if (pkg == "com.waze") (if (point) "https://waze.com/ul?ll=$ll&navigate=yes" else "https://waze.com/ul?q=${Uri.encode(q.trim())}&navigate=yes")
+                   else "google.navigation:q=" + (if (point) ll else Uri.encode(q.trim()))
+        try {
+            ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link)).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            navNote = "abriu no ${name[pkg]} pelo celular (Para onde?)"
+            return name[pkg]
+        } catch (e: Exception) { navNote = "${name[pkg]} recusou: ${e.javaClass.simpleName}" }
+    }
+    return null
 }
 
 /**
