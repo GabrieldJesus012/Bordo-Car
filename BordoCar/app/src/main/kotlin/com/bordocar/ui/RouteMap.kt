@@ -138,7 +138,8 @@ private fun TileMap(lines: List<List<LL>>, colors: List<Color>, modifier: Modifi
     val tiles = remember { mutableStateMapOf<String, ImageBitmap>() }
     BoxWithConstraints(modifier) {
         val w = constraints.maxWidth.toFloat(); val h = constraints.maxHeight.toFloat()
-        val tile = 256f * (if (density > 1.4f) 2f else 1f) * 0.75f      // on-screen size of a tile, in pixels
+        val dens = androidx.compose.ui.platform.LocalDensity.current.density
+        val tile = 256f * (if (dens > 1.4f) 2f else 1f) * 0.75f      // on-screen size of a tile, in pixels
         val all = lines.flatten()
         val center0 = Drive.pos ?: LL(-5.0892, -42.8016)
         // the closest zoom that fits all the routes (leaving room for the title on the left and top)
