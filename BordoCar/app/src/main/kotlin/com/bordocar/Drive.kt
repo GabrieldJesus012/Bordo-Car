@@ -53,6 +53,7 @@ object Drive {
     fun init(ctx: Context) {
         if (prefs != null) return
         prefs = Prefs(ctx)
+        Tracks.init(ctx)
         // the odometer starts from the trips already saved (versions before it existed)
         if (prefs?.s("odo", "").isNullOrBlank()) prefs?.put("odo", trips().sumOf { it.dist }.toString())
     }
@@ -101,7 +102,7 @@ object Drive {
                 // measured from the last point counted, so slow traffic (under 2 m between fixes) adds up too; a gap in the GPS
                 // (a tunnel) counts when the jump fits the time it took
                 if (d >= 2.0 && (sp > 0.8 || d >= 25.0)) {
-                    if (d <= max(250.0, (now - tripLastAt) / 1000.0 * 45.0)) { tripDistance += d; tick++ }
+                    if (d <= max(250.0, (now - tripLastAt) / 1000.0 * 45.0)) { tripDistance += d; tick++; Tracks.add(tripT0, p) }
                     tripLast = p; tripLastAt = now
                 }
             }
@@ -109,13 +110,15 @@ object Drive {
             if (now - tripSnapAt > 20_000L) snap(now)
         } else if (sp > 1.5) {
             tripOn = true; tripT0 = now; tripDistance = 0.0; tripMoveSec = 0; tripLast = p; tripLastAt = now; tripFrom = p; tripMax = 0
+            Tracks.add(tripT0, p, force = true)
         }
         // the end of a trip: standing still for two minutes
         if (sp > 4.0) { drove = true; stillSince = 0L }
         else if (sp < 0.8 && drove) {
             if (stillSince == 0L) stillSince = now
             else if (now - stillSince > 120_000) {
-                if (tripOn && tripDistance > 300) save(Trip(tripT0, stillSince, tripDistance, tripMoveSec, tripFrom, p))
+                if (tripOn && tripDistance > 300) { Tracks.add(tripT0, p, force = true); Tracks.flush(); save(Trip(tripT0, stillSince, tripDistance, tripMoveSec, tripFrom, p)) }
+                else if (tripOn) Tracks.drop(tripT0)
                 tripOn = false; drove = false; stillSince = 0L
                 prefs?.put("tripcur", "")
                 tick++
@@ -126,7 +129,8 @@ object Drive {
     /** The car was switched off (or the phone unplugged): the trip being driven ends and is saved now. */
     fun endTrip() {
         try {
-            if (tripOn && tripDistance > 300) save(Trip(tripT0, System.currentTimeMillis(), tripDistance, tripMoveSec, tripFrom, pos))
+            if (tripOn && tripDistance > 300) { pos?.let { Tracks.add(tripT0, it, force = true) }; Tracks.flush(); save(Trip(tripT0, System.currentTimeMillis(), tripDistance, tripMoveSec, tripFrom, pos)) }
+            else if (tripOn) Tracks.drop(tripT0)
             tripOn = false; drove = false; stillSince = 0L
             prefs?.put("tripcur", "")
         } catch (e: Exception) { }
@@ -134,6 +138,7 @@ object Drive {
 
     private fun snap(now: Long) {
         tripSnapAt = now
+        Tracks.flush()
         try {
             val o = JSONObject().put("s", tripT0).put("d", tripDistance).put("m", tripMoveSec).put("at", now)
             tripFrom?.let { o.put("fl", it.lat).put("fo", it.lon) }; pos?.let { o.put("tl", it.lat).put("to", it.lon) }
@@ -204,6 +209,11 @@ object Drive {
     /** Distance (m) and time moving (s) driven today: the trips saved today plus the one being driven now. */
     /** The trip going on now (metres, seconds moving), or null. */
     fun current(): Pair<Double, Long>? = if (tripOn) tripDistance to tripMoveSec else null
+    /** When the trip going on started (0 when there's none). */
+    fun currentStart(): Long = if (tripOn) tripT0 else 0L
+    /** Start of today, and of this week (Monday). */
+    fun todayStart(): Long = dayStart()
+    fun weekStart(): Long { val today = (java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK) + 5) % 7; return dayStart() - today * 86_400_000L }
 
     /** How many trips today (the one going on counts). */
     fun todayTrips(): Int { val d0 = dayStart(); return trips().count { it.start >= d0 } + (if (tripOn && tripT0 >= d0) 1 else 0) }

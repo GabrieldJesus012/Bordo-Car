@@ -197,6 +197,7 @@ fun Dashboard(ctx: Context, actions: DashActions, padL: Dp, padT: Dp, padR: Dp, 
         }
     }
     val navigating = NavNotice.active(now)
+    if (RouteView.show != null && Modes.cur == "normal" && !Sport.showing(now)) { RouteMapScreen(now, padL, padT, padR, padB); return }
     if (Modes.cur == "esportivo" || Sport.showing(now)) { SportDash(now, bat, charging, wx, city, padL, padT, padR, padB); return }
     if (Modes.cur == "musica") { MusicDash(now, bat, charging, wx, city, padL, padT, padR, padB); return }
     if (Modes.cur == "estrada") { RoadDash(now, bat, charging, wx, city, padL, padT, padR, padB); return }
@@ -217,8 +218,9 @@ fun Dashboard(ctx: Context, actions: DashActions, padL: Dp, padT: Dp, padR: Dp, 
                         CompassCard(Modifier.weight(1f).fillMaxHeight())
                     }
                     Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        TodayCard(Modifier.weight(1f).fillMaxHeight())
-                        WeekCard(Modifier.weight(1f).fillMaxHeight())
+                        // a tap shows the routes driven today / this week on a map
+                        TodayCard(Modifier.weight(1f).fillMaxHeight().carTap("km-hoje") { RouteView.show = "hoje" })
+                        WeekCard(Modifier.weight(1f).fillMaxHeight().carTap("km-semana") { RouteView.show = "semana" })
                     }
                 }
             }
