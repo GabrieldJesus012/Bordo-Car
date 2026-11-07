@@ -4,6 +4,7 @@ import android.graphics.BitmapFactory
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -122,6 +123,42 @@ fun RouteMapScreen(now: Long, padL: Dp, padT: Dp, padR: Dp, padB: Dp) {
     }
 }
 
+/** The same map on the phone (Viagens): one trip, or a whole day, with a button to close it. */
+@Composable
+fun PhoneRouteMap(trips: List<Trip>, title: String, onClose: () -> Unit) {
+    val data by produceState(initialValue = emptyList<Pair<Trip, List<LL>>>(), trips) {
+        value = withContext(Dispatchers.IO) { trips.sortedBy { it.start }.map { it to Tracks.load(it.start) } }
+    }
+    var loaded by remember(trips) { mutableStateOf(false) }
+    LaunchedEffect(data) { if (data.isNotEmpty()) loaded = true }
+    val drawn = data.mapIndexedNotNull { i, (_, pts) -> if (pts.size > 1) pts to TripColors[i % TripColors.size] else null }
+    val br = java.util.Locale("pt", "BR")
+    val hm = java.text.SimpleDateFormat("HH:mm", br)
+    Box(Modifier.fillMaxSize().background(Color(0xFF0B0F17))) {
+        TileMap(drawn.map { it.first }, drawn.map { it.second }, Modifier.fillMaxSize(), fitW = 0.8f, fitH = 0.55f, shiftX = 0f)
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(48.dp).clip(CircleShape).background(Color(0xE6101828)).border(1.dp, Color(0x55FFFFFF), CircleShape)
+                    .clickable { onClose() }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.Close, null, tint = Color.White, modifier = Modifier.size(28.dp))
+                }
+                Column(Modifier.padding(start = 12.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xCC101828)).padding(horizontal = 14.dp, vertical = 6.dp)) {
+                    Text(title, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                    Text(String.format(br, "%.1f km", trips.sumOf { it.dist } / 1000.0) + (if (trips.size > 1) " · ${trips.size} viagens" else " · ${trips.first().moving / 60} min"),
+                        color = Color(0xFFC9D6F2), fontSize = 14.sp)
+                }
+            }
+            if (data.size > 1) Column(Modifier.padding(top = 10.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xCC101828)).padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                data.forEachIndexed { i, (t, _) -> LegendRow(TripColors[i % TripColors.size], hm.format(java.util.Date(t.start)), String.format(br, "%.1f km", t.dist / 1000.0)) }
+            }
+            if (loaded && drawn.isEmpty()) Text("Essa viagem é de antes das rotas serem guardadas: as rotas aparecem a partir das próximas viagens.",
+                color = Color(0xFFC9D6F2), fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xCC101828)).padding(10.dp))
+        }
+        Text("© OpenStreetMap · © CARTO", color = Color(0x99FFFFFF), fontSize = 11.sp, modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp))
+    }
+}
+
 @Composable
 private fun LegendRow(c: Color, a: String, b: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -133,7 +170,7 @@ private fun LegendRow(c: Color, a: String, b: String) {
 
 /** A map made of map tiles (fetched once and kept on the phone), fitted to the routes, with the routes drawn over it. */
 @Composable
-private fun TileMap(lines: List<List<LL>>, colors: List<Color>, modifier: Modifier) {
+private fun TileMap(lines: List<List<LL>>, colors: List<Color>, modifier: Modifier, fitW: Float = 0.62f, fitH: Float = 0.72f, shiftX: Float = 0.1f) {
     val ctx = LocalContext.current.applicationContext
     val tiles = remember { mutableStateMapOf<String, ImageBitmap>() }
     BoxWithConstraints(modifier) {
@@ -148,14 +185,14 @@ private fun TileMap(lines: List<List<LL>>, colors: List<Color>, modifier: Modifi
             z = 17
             while (z > 3) {
                 val xs = all.map { mx(it.lon, z, tile) }; val ys = all.map { my(it.lat, z, tile) }
-                if ((xs.max() - xs.min()) <= w * 0.62f && (ys.max() - ys.min()) <= h * 0.72f) break
+                if ((xs.max() - xs.min()) <= w * fitW && (ys.max() - ys.min()) <= h * fitH) break
                 z--
             }
         }
         val cxw: Float; val cyw: Float
         if (all.isNotEmpty()) {
             val xs = all.map { mx(it.lon, z, tile) }; val ys = all.map { my(it.lat, z, tile) }
-            cxw = (xs.max() + xs.min()) / 2f - w * 0.1f      // a little to the left, so the routes sit right of the legend
+            cxw = (xs.max() + xs.min()) / 2f - w * shiftX      // (in the car) a little to the left, so the routes sit right of the legend
             cyw = (ys.max() + ys.min()) / 2f - h * 0.04f
         } else { cxw = mx(center0.lon, z, tile); cyw = my(center0.lat, z, tile) }
         val ox = cxw - w / 2f; val oy = cyw - h / 2f

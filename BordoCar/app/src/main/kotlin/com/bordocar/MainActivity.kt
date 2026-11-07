@@ -66,6 +66,9 @@ class MainActivity : ComponentActivity() {
     /** Choosing a place: for Casa / Trabalho ([key]) or a new favourite (key null). */
     private class Pick(val key: String?, val label: String)
     private var picking by mutableStateOf<Pick?>(null)
+    /** The trips shown on the map (Viagens), and its title. */
+    private var mapTrips by mutableStateOf<List<Trip>?>(null)
+    private var mapTitle = ""
     private var tab by mutableIntStateOf(0)
     /** The spreadsheet waiting to be written where you chose to save it. */
     private var pendingCsv = ""
@@ -124,6 +127,13 @@ class MainActivity : ComponentActivity() {
         LaunchedEffect(Unit) { while (true) { try { NowPlaying.refresh(this@MainActivity) } catch (e: Exception) { }; tick++; delay(1000) } }
         val pk = picking
         if (pk != null) { Picker(pk) { picking = null; refresh.intValue++ }; return }
+        // a trip (or a whole day) on the map
+        val mt = mapTrips
+        if (mt != null) {
+            androidx.activity.compose.BackHandler { mapTrips = null }
+            Box(Modifier.fillMaxSize().systemBarsPadding()) { com.bordocar.ui.PhoneRouteMap(mt, mapTitle) { mapTrips = null } }
+            return
+        }
         val scroll = rememberScrollState()
         val scope = androidx.compose.runtime.rememberCoroutineScope()
         Column(Modifier.fillMaxSize().background(Bg).systemBarsPadding().verticalScroll(scroll).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -358,13 +368,16 @@ class MainActivity : ComponentActivity() {
         for ((d, list) in trips.groupBy { day.format(java.util.Date(it.start)) }) {
             val title = when (d) { today -> "Hoje"; yest -> "Ontem"; else -> java.text.SimpleDateFormat("EEEE, d 'de' MMMM", br).format(java.util.Date(list.first().start)) }
             Section(title) {
+                if (list.size > 1) Text("Ver o dia no mapa ›", color = Accent, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable { mapTitle = title; mapTrips = list })
                 for (tr in list) {
                     val from = remember(tr.start) { mutableStateOf("") }; val to = remember(tr.start) { mutableStateOf("") }
                     LaunchedEffect(tr.start) {
                         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { from.value = placeName(tr.from); to.value = placeName(tr.to) }
                     }
                     val hm = java.text.SimpleDateFormat("HH:mm", br)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    // a tap shows this trip on the map
+                    Row(Modifier.clickable { mapTitle = "$title · ${hm.format(java.util.Date(tr.start))}"; mapTrips = listOf(tr) }, verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("${hm.format(java.util.Date(tr.start))} → ${hm.format(java.util.Date(tr.end))}", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                             val route = listOf(from.value, to.value).filter { it.isNotBlank() }
