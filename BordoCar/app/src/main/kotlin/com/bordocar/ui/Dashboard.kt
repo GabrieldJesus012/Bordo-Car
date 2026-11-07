@@ -848,6 +848,41 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
             MapRoute.requestNear(jctx.applicationContext, here, hd, jm, kindNow, NavNotice.key + NavNotice.text)
         val jinfo = if (navigating && (onCar || pv) && here != null && jm != null && jm <= 500.0 && MapRoute.enabled(jctx))
             junctionInfo(here, jm, kindNow, hd) else null
+        if (jinfo != null && here != null && com.bordocar.Prefs(jctx).s("jstyle", "D") == "B") {
+            // (style B) the map over the whole screen with the sky of the hour on top, see-through, fading into the map; the sign,
+            // the speed and the arrival up there in the sky, the turn in the lower half
+            JunctionMap(now, jinfo, sky.preset, here, hd, Modifier.fillMaxSize(), textureView = !onCar, carAt = 0.88, turnAt = 0.48)
+            Box(Modifier.fillMaxWidth().fillMaxHeight(0.5f).background(Brush.verticalGradient(listOf(
+                sky.colors[0].copy(alpha = 0.95f), sky.colors[1].copy(alpha = 0.6f), sky.colors[2].copy(alpha = 0.0f)))))
+            Box(Modifier.fillMaxWidth().padding(start = padL, top = padT, end = padR)) {
+                BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp), plain = true)
+            }
+            val kmh = Math.round((Drive.speed * 3.6).coerceAtLeast(0.0)).toInt()
+            val avg = if (doneS >= 60) Math.round(doneM / 1000.0 / (doneS / 3600.0)).toInt() else null
+            Row(Modifier.fillMaxWidth().padding(start = padL + 6.dp, end = padR + 6.dp, top = padT + 72.dp), verticalAlignment = Alignment.Top) {
+                Column(Modifier.clip(RoundedCornerShape(14.dp)).background(Color(0xCC0B1222)).padding(horizontal = 14.dp, vertical = 8.dp)) {
+                    Label("VELOCIDADE")
+                    Text("$kmh", color = Color.White, fontSize = 50.sp, lineHeight = 52.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                    Text("km/h" + (if (avg != null) " · média $avg" else ""), color = Color(0xFFCFD8EA), fontSize = 14.sp)
+                }
+                Spacer(Modifier.weight(1f))
+                RoadSign(true, dist, rest, wx, city, Modifier.fillMaxWidth(0.5f), 300f, nth = jinfo.nth, kind = kindNow)
+                Spacer(Modifier.weight(1f))
+                if (a?.eta != null) Column(Modifier.clip(RoundedCornerShape(14.dp)).background(Color(0xCC0B1222)).padding(horizontal = 14.dp, vertical = 8.dp),
+                    horizontalAlignment = Alignment.End) {
+                    Label("CHEGADA")
+                    Text(a.eta, color = Color.White, fontSize = 40.sp, lineHeight = 44.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                    val m = Regex("(\\d+h \\d+|\\d+ min)").find(a.left)?.value
+                    if (m != null) Text("em $m", color = Color(0xFFCFD8EA), fontSize = 14.sp)
+                }
+            }
+            if (NowPlaying.title.isNotBlank()) Text("♪ " + NowPlaying.title + (if (NowPlaying.artist.isNotBlank()) " — " + NowPlaying.artist else ""),
+                color = Color(0xFFE8E0F0), fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth(0.4f).padding(start = padL + 12.dp, bottom = padB + 6.dp))
+            if (pv) Text("PRÉVIA", color = Color(0xFF1A0A0A), fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = padB + 10.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFFFFC24E)).padding(horizontal = 8.dp, vertical = 2.dp))
+            return@Box
+        }
         if (jinfo != null && here != null) {
             // the map of the turn over the whole screen, seen from above, with the bar on top and the speed, the sign and the arrival
             // in a strip at the bottom (the top of the map stays free for the turn)
