@@ -89,7 +89,7 @@ object Sport {
     }
     /** For how long the preview shows its sample turn (longer with the map, to see it come closer). */
     const val SAMPLE_S = 7f
-    const val SAMPLE_MAP_S = 10f
+    const val SAMPLE_MAP_S = 12.5f
     fun previewing(now: Long) = previewFrom > 0L && now - previewFrom in 0 until PREVIEW_MS
     /** Called once a second with the speed in km/h. */
     fun update(kmh: Int) {
@@ -131,7 +131,7 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
     val sample = preview && !realRoute && t < (if (mapOk) Sport.SAMPLE_MAP_S else Sport.SAMPLE_S)
     val route = realRoute || sample
     // (the preview with the map: a drive along a route near you up to its first turn)
-    val sim = if (sample && mapOk) JunctionPreview.simAt(t.toDouble()) else null
+    val sim = if (sample && mapOk) JunctionPreview.simAt(t.toDouble(), back = 300.0, speed = 32.0) else null
     val turnTitle = if (sim != null) "${Math.round(sim.metres / 10.0) * 10} m" else if (sample) "${(800 - t * 60).toInt().coerceAtLeast(100) / 10 * 10} m" else NavNotice.title
     val turnText = if (sim != null) sim.street else if (sample) "Vire à direita · exemplo" else NavNotice.text
     val turnSub = if (sample) "Chegada 18:05 · 21 km" else NavNotice.sub
@@ -145,7 +145,7 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
     if (here != null && realRoute && !preview && onCar && jm != null && jm <= 700.0)
         MapRoute.requestNear(ctx.applicationContext, here, mapHd, jm, jKind, NavNotice.key + NavNotice.text)
     val jinfo = if (mapOk && here != null && jm != null && jm <= 500.0 && ((realRoute && (onCar || preview)) || sim != null))
-        junctionInfo(here, jm, jKind, mapHd) else null
+        junctionInfo(here, jm, jKind, mapHd, sim?.turn) else null
 
     Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color(0xFF2A1012), Color(0xFF0E0808), Color(0xFF060404)), center = Offset(750f, 0f), radius = 1900f))
         .drawBehind {
@@ -203,7 +203,8 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
                         // close to the turn: the map seen from above in the middle of the circle (route in red), the ring around it
                         if (jinfo != null && here != null) JunctionMap(now, jinfo, "night", here, mapHd,
                             Modifier.size(d * HOLE).clip(androidx.compose.foundation.shape.CircleShape), textureView = true,
-                            carAt = 0.80, turnAt = 0.28, routeColor = "#FF4A3A", caseColor = "#7A1016")
+                            carAt = 0.68, turnAt = 0.2, routeColor = "#FF4A3A", caseColor = "#7A1016",
+                            lineScale = 0.55, minSpanM = 110.0, maxZoom = 17.6, roundBrand = true)
                         Ring(if (jinfo != null) mapHd else hd, route, Modifier.size(d), hole = jinfo != null)
                         if (jinfo == null) Column(Modifier.size(d * 0.7f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             if (route) {
@@ -274,7 +275,7 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
 }
 
 /** How much of the circle the map of the turn takes (its diameter, as a part of the circle's). */
-private const val HOLE = 0.74f
+private const val HOLE = 0.78f
 
 /** The turn of the map: the arrow of where to turn in a red square, "3ª à esquerda", the distance and the street. */
 @Composable

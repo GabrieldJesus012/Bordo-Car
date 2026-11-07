@@ -849,7 +849,7 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
         if (here != null && !pv && navigating && onCar && jm != null && jm <= 700.0)
             MapRoute.requestNear(jctx.applicationContext, here, hd, jm, kindNow, NavNotice.key + NavNotice.text)
         val jinfo = if (navigating && (onCar || pv) && here != null && jm != null && jm <= 500.0 && MapRoute.enabled(jctx))
-            junctionInfo(here, jm, kindNow, hd) else null
+            junctionInfo(here, jm, kindNow, hd, sim?.turn) else null
         if (jinfo != null && here != null && com.bordocar.Prefs(jctx).s("jstyle", "D") == "B") {
             // (style B) the map over the whole screen with the sky of the hour on top, see-through, fading into the map; the sign,
             // the speed and the arrival up there in the sky, the turn in the lower half

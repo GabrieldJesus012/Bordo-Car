@@ -41,7 +41,9 @@ import com.mapbox.maps.extension.style.sources.generated.GeoJsonSource
 import com.mapbox.maps.extension.style.sources.getSourceAs
 import com.mapbox.maps.plugin.animation.MapAnimationOptions
 import com.mapbox.maps.plugin.animation.easeTo
+import com.mapbox.maps.plugin.attribution.attribution
 import com.mapbox.maps.plugin.compass.compass
+import com.mapbox.maps.plugin.logo.logo
 import com.mapbox.maps.plugin.gestures.gestures
 import com.mapbox.maps.plugin.scalebar.scalebar
 import kotlin.math.cos
@@ -78,15 +80,15 @@ object JunctionPreview {
         if (MapRoute.enabled(ctx)) MapRoute.request(ctx.applicationContext, here, ahead(here, Drive.heading ?: 35.0, 900.0), keep = false)
     }
     /** Where the preview's car is now, which way it goes, how far the turn is, which turn and its street. */
-    class Sim(val here: LL, val heading: Double, val metres: Double, val kind: String, val street: String)
+    class Sim(val here: LL, val heading: Double, val metres: Double, val kind: String, val street: String, val turn: MapRoute.Turn? = null)
     fun sim(now: Long): Sim = simAt((now - startedAt) / 1000.0)
-    /** The same, [t] seconds into a preview. */
-    fun simAt(t: Double): Sim {
+    /** The same, [t] seconds into a preview: starting [back] metres before the turn at [speed] m/s, going through it. */
+    fun simAt(t: Double, back: Double = 380.0, speed: Double = 30.0): Sim {
         val turn = MapRoute.turns.firstOrNull { it.alongM > 200.0 && it.kind in setOf("direita", "esquerda", "leve-direita", "leve-esquerda") } ?: MapRoute.turns.firstOrNull()
         if (turn != null) {
-            val m = (turn.alongM - 380.0 + t * 24.0).coerceAtMost(turn.alongM - 12.0).coerceAtLeast(0.0)
+            val m = (turn.alongM - back + t * speed).coerceAtMost(turn.alongM + 100.0).coerceAtLeast(0.0)
             val p = MapRoute.pointAt(m)
-            if (p != null) return Sim(p.first, p.second, turn.alongM - m, turn.kind, turn.street)
+            if (p != null) return Sim(p.first, p.second, (turn.alongM - m).coerceAtLeast(0.0), turn.kind, turn.street, turn)
         }
         val o = origin ?: LL(-5.0892, -42.8016)
         return Sim(o, 0.0, (260.0 - t * 14.0).coerceAtLeast(30.0), "direita", "Rua de exemplo")
@@ -97,8 +99,8 @@ object JunctionPreview {
  * Works out the turn: on Mapbox's route when there is one (exact, with the streets to count), otherwise straight ahead at the
  * distance of the navigation notice.
  */
-fun junctionInfo(here: LL, metres: Double, kind: String?, heading: Double?): JunctionInfo {
-    val t = MapRoute.next(here, metres, kind)
+fun junctionInfo(here: LL, metres: Double, kind: String?, heading: Double?, forced: MapRoute.Turn? = null): JunctionInfo {
+    val t = forced ?: MapRoute.next(here, metres, kind)
     if (t != null) {
         val pos = MapRoute.position(here).first
         val line = MapRoute.slice(pos - 30.0, t.alongM + 120.0)
@@ -131,12 +133,15 @@ private fun styleJson(preset: String) = org.json.JSONObject()
  */
 @Composable
 fun JunctionMap(now: Long, info: JunctionInfo, preset: String, here0: LL, heading: Double?, modifier: Modifier, textureView: Boolean = false,
-                carAt: Double = 0.88, turnAt: Double = 0.2, routeColor: String = "#3D8BFF", caseColor: String = "#0B2A66") {
+                carAt: Double = 0.88, turnAt: Double = 0.2, routeColor: String = "#3D8BFF", caseColor: String = "#0B2A66",
+                lineScale: Double = 1.0, minSpanM: Double = 20.0, maxZoom: Double = 18.6, roundBrand: Boolean = false) {
+    val ls = lineScale
     val ctx = LocalContext.current
     val token = MapRoute.token(ctx)
     var view by remember { mutableStateOf<MapView?>(null) }
     var style by remember { mutableStateOf<Style?>(null) }
     var first by remember { mutableStateOf(true) }
+    var branded by remember { mutableStateOf(false) }
     AndroidView(factory = { c ->
         try { MapboxOptions.accessToken = token } catch (e: Throwable) { }
         val mv = MapView(c, MapInitOptions(c, textureView = textureView, styleUri = null,
@@ -153,23 +158,23 @@ fun JunctionMap(now: Long, info: JunctionInfo, preset: String, here0: LL, headin
                     st.addSource(GeoJsonSource.Builder("jr-num").featureCollection(pointsFc(emptyList())).build())
                     st.addSource(GeoJsonSource.Builder("jr-hi").featureCollection(pointsFc(emptyList())).build())
                     st.addSource(GeoJsonSource.Builder("jr-me").featureCollection(pointsFc(emptyList())).build())
-                    st.addLayer(LineLayer("jr-route-case", "jr-route").lineColor(caseColor).lineWidth(16.0).lineCap(LineCap.ROUND).lineJoin(LineJoin.ROUND).lineEmissiveStrength(1.0))
-                    st.addLayer(LineLayer("jr-route-line", "jr-route").lineColor(routeColor).lineWidth(10.0).lineCap(LineCap.ROUND).lineJoin(LineJoin.ROUND).lineEmissiveStrength(1.0))
+                    st.addLayer(LineLayer("jr-route-case", "jr-route").lineColor(caseColor).lineWidth(16.0 * ls).lineCap(LineCap.ROUND).lineJoin(LineJoin.ROUND).lineEmissiveStrength(1.0))
+                    st.addLayer(LineLayer("jr-route-line", "jr-route").lineColor(routeColor).lineWidth(10.0 * ls).lineCap(LineCap.ROUND).lineJoin(LineJoin.ROUND).lineEmissiveStrength(1.0))
                     // the turn: a wide white band with an arrowhead at its end, lying on the road
                     st.addSource(GeoJsonSource.Builder("jr-arrow").featureCollection(pointsFc(emptyList())).build())
                     try { st.addStyleImage("jr-arrowhead", 1f, arrowHead().toMapboxImage(), false, emptyList(), emptyList(), null) } catch (e: Throwable) { }
-                    st.addLayer(LineLayer("jr-turn-case", "jr-turn").lineColor("#0B1430").lineWidth(20.0).lineCap(LineCap.BUTT).lineJoin(LineJoin.ROUND).lineEmissiveStrength(1.0))
-                    st.addLayer(LineLayer("jr-turn-line", "jr-turn").lineColor("#FFFFFF").lineWidth(14.0).lineCap(LineCap.BUTT).lineJoin(LineJoin.ROUND).lineEmissiveStrength(1.0))
-                    st.addLayer(SymbolLayer("jr-arrow-s", "jr-arrow").iconImage("jr-arrowhead").iconSize(0.42).iconRotate(Expression.get("b"))
+                    st.addLayer(LineLayer("jr-turn-case", "jr-turn").lineColor("#0B1430").lineWidth(20.0 * ls).lineCap(LineCap.BUTT).lineJoin(LineJoin.ROUND).lineEmissiveStrength(1.0))
+                    st.addLayer(LineLayer("jr-turn-line", "jr-turn").lineColor("#FFFFFF").lineWidth(14.0 * ls).lineCap(LineCap.BUTT).lineJoin(LineJoin.ROUND).lineEmissiveStrength(1.0))
+                    st.addLayer(SymbolLayer("jr-arrow-s", "jr-arrow").iconImage("jr-arrowhead").iconSize(0.42 * ls).iconRotate(Expression.get("b"))
                         .iconRotationAlignment(IconRotationAlignment.MAP).iconPitchAlignment(IconPitchAlignment.MAP).iconAllowOverlap(true).iconIgnorePlacement(true))
-                    st.addLayer(CircleLayer("jr-num-c", "jr-num").circlePitchScale(CirclePitchScale.VIEWPORT).circlePitchAlignment(CirclePitchAlignment.VIEWPORT).circleRadius(12.0).circleColor("#151B27").circleStrokeColor("#FFFFFF").circleStrokeWidth(2.0).circleEmissiveStrength(1.0))
-                    st.addLayer(SymbolLayer("jr-num-t", "jr-num").textField(Expression.get("n")).textSize(14.0).textPitchAlignment(TextPitchAlignment.VIEWPORT).textColor("#FFFFFF")
+                    st.addLayer(CircleLayer("jr-num-c", "jr-num").circlePitchScale(CirclePitchScale.VIEWPORT).circlePitchAlignment(CirclePitchAlignment.VIEWPORT).circleRadius(maxOf(8.0, 12.0 * ls)).circleColor("#151B27").circleStrokeColor("#FFFFFF").circleStrokeWidth(2.0).circleEmissiveStrength(1.0))
+                    st.addLayer(SymbolLayer("jr-num-t", "jr-num").textField(Expression.get("n")).textSize(maxOf(10.0, 14.0 * ls)).textPitchAlignment(TextPitchAlignment.VIEWPORT).textColor("#FFFFFF")
                         .textFont(listOf("DIN Pro Bold", "Arial Unicode MS Bold")).textAllowOverlap(true).textIgnorePlacement(true))
-                    st.addLayer(CircleLayer("jr-hi-c", "jr-hi").circlePitchScale(CirclePitchScale.VIEWPORT).circlePitchAlignment(CirclePitchAlignment.VIEWPORT).circleRadius(15.0).circleColor("#FFC24E").circleStrokeColor("#FFFFFF").circleStrokeWidth(2.5).circleEmissiveStrength(1.0))
-                    st.addLayer(SymbolLayer("jr-hi-t", "jr-hi").textField(Expression.get("n")).textSize(16.0).textPitchAlignment(TextPitchAlignment.VIEWPORT).textColor("#111111")
+                    st.addLayer(CircleLayer("jr-hi-c", "jr-hi").circlePitchScale(CirclePitchScale.VIEWPORT).circlePitchAlignment(CirclePitchAlignment.VIEWPORT).circleRadius(maxOf(9.0, 15.0 * ls)).circleColor("#FFC24E").circleStrokeColor("#FFFFFF").circleStrokeWidth(2.5).circleEmissiveStrength(1.0))
+                    st.addLayer(SymbolLayer("jr-hi-t", "jr-hi").textField(Expression.get("n")).textSize(maxOf(11.0, 16.0 * ls)).textPitchAlignment(TextPitchAlignment.VIEWPORT).textColor("#111111")
                         .textFont(listOf("DIN Pro Bold", "Arial Unicode MS Bold")).textAllowOverlap(true).textIgnorePlacement(true))
-                    st.addLayer(CircleLayer("jr-me-glow", "jr-me").circleRadius(20.0).circleColor(routeColor).circleOpacity(0.3).circleEmissiveStrength(1.0))
-                    st.addLayer(CircleLayer("jr-me-dot", "jr-me").circleRadius(10.0).circleColor("#FFFFFF").circleStrokeColor(routeColor).circleStrokeWidth(4.0).circleEmissiveStrength(1.0))
+                    st.addLayer(CircleLayer("jr-me-glow", "jr-me").circleRadius(20.0 * ls).circleColor(routeColor).circleOpacity(0.3).circleEmissiveStrength(1.0))
+                    st.addLayer(CircleLayer("jr-me-dot", "jr-me").circleRadius(maxOf(6.0, 10.0 * ls)).circleColor("#FFFFFF").circleStrokeColor(routeColor).circleStrokeWidth(maxOf(2.5, 4.0 * ls)).circleEmissiveStrength(1.0))
                 } catch (e: Throwable) { android.util.Log.w("BordoCar", "junction layers", e) }
                 style = st
             }
@@ -207,15 +212,25 @@ fun JunctionMap(now: Long, info: JunctionInfo, preset: String, here0: LL, headin
         // and looks straight down on the junction
         // always seen from above (no tilt, no distortion): the middle between you and the turn, the way to the turn up, zoomed so
         // both fit with some street around them
-        val d = dist(here, info.turnAt).coerceAtLeast(20.0)
+        val d = dist(here, info.turnAt)
         // you at [carAt] of the map's height, the turn at [turnAt] (from the top), so neither hides under the edges or the panels
         val span = (carAt - turnAt).coerceAtLeast(0.2)
-        val k = (carAt - 0.5) / span
-        val look = LL(here.lat + (info.turnAt.lat - here.lat) * k, here.lon + (info.turnAt.lon - here.lon) * k)
-        val brg = if (d > 15.0) bearing(here, info.turnAt) else (heading ?: 0.0)
-        val hDp = (mv.height / mv.resources.displayMetrics.density).coerceAtLeast(150f)
-        val mpp = d / (hDp * span)
-        val zoom = (ln(40_075_016.686 * cos(Math.toRadians(here.lat)) / (512.0 * mpp)) / ln(2.0)).coerceIn(14.5, 18.6)
+        // at the turn or past it (it's behind you): the map just follows the way you're going
+        val toTurn = bearing(here, info.turnAt)
+        val behind = heading != null && Math.abs(((heading - toTurn + 540.0) % 360.0) - 180.0) > 100.0
+        val near = d < 25.0 || behind
+        val brg = if (!near) toTurn else (heading ?: toTurn)
+        val hDp = (mv.height / mv.resources.displayMetrics.density).coerceAtLeast(if (roundBrand) 80f else 150f)
+        val mpp = (if (near) maxOf(60.0, minSpanM) else d.coerceAtLeast(minSpanM)) / (hDp * span)
+        val look = MapRoute.ahead(here, brg, (carAt - 0.5) * hDp * mpp)
+        val zoom = (ln(40_075_016.686 * cos(Math.toRadians(here.lat)) / (512.0 * mpp)) / ln(2.0)).coerceIn(14.5, maxZoom)
+        // (in the round map) the Mapbox logo and its ⓘ at the bottom, in the middle, where the circle is wide enough
+        if (roundBrand && !branded && mv.height > 0) {
+            branded = true
+            val px = mv.resources.displayMetrics.density
+            try { mv.logo.updateSettings { position = android.view.Gravity.BOTTOM or android.view.Gravity.CENTER_HORIZONTAL; marginBottom = mv.height * 0.07f; marginRight = 12f * px; marginLeft = 0f } } catch (e: Throwable) { }
+            try { mv.attribution.updateSettings { position = android.view.Gravity.BOTTOM or android.view.Gravity.CENTER_HORIZONTAL; marginBottom = mv.height * 0.07f; marginLeft = 46f * px; marginRight = 0f } } catch (e: Throwable) { }
+        }
         val cam = CameraOptions.Builder().center(pt(look)).zoom(zoom).pitch(0.0).bearing(brg).build()
         try { mv.mapboxMap.easeTo(cam, MapAnimationOptions.mapAnimationOptions { duration(if (first) 1800L else 950L) }) } catch (e: Throwable) { }
         first = false
