@@ -125,7 +125,8 @@ private fun styleJson(preset: String) = org.json.JSONObject()
  * following you to the turn.
  */
 @Composable
-fun JunctionMap(now: Long, info: JunctionInfo, preset: String, here0: LL, heading: Double?, modifier: Modifier, textureView: Boolean = false) {
+fun JunctionMap(now: Long, info: JunctionInfo, preset: String, here0: LL, heading: Double?, modifier: Modifier, textureView: Boolean = false,
+                carAt: Double = 0.88, turnAt: Double = 0.2) {
     val ctx = LocalContext.current
     val token = MapRoute.token(ctx)
     var view by remember { mutableStateOf<MapView?>(null) }
@@ -202,11 +203,13 @@ fun JunctionMap(now: Long, info: JunctionInfo, preset: String, here0: LL, headin
         // always seen from above (no tilt, no distortion): the middle between you and the turn, the way to the turn up, zoomed so
         // both fit with some street around them
         val d = dist(here, info.turnAt).coerceAtLeast(20.0)
-        // you near the bottom of the map (88%), the turn near its top (20%), so neither hides under the edges or the sign
-        val look = LL(here.lat + (info.turnAt.lat - here.lat) * 0.56, here.lon + (info.turnAt.lon - here.lon) * 0.56)
+        // you at [carAt] of the map's height, the turn at [turnAt] (from the top), so neither hides under the edges or the panels
+        val span = (carAt - turnAt).coerceAtLeast(0.2)
+        val k = (carAt - 0.5) / span
+        val look = LL(here.lat + (info.turnAt.lat - here.lat) * k, here.lon + (info.turnAt.lon - here.lon) * k)
         val brg = if (d > 15.0) bearing(here, info.turnAt) else (heading ?: 0.0)
         val hDp = (mv.height / mv.resources.displayMetrics.density).coerceAtLeast(150f)
-        val mpp = d / (hDp * 0.68)
+        val mpp = d / (hDp * span)
         val zoom = (ln(40_075_016.686 * cos(Math.toRadians(here.lat)) / (512.0 * mpp)) / ln(2.0)).coerceIn(14.5, 18.6)
         val cam = CameraOptions.Builder().center(pt(look)).zoom(zoom).pitch(0.0).bearing(brg).build()
         try { mv.mapboxMap.easeTo(cam, MapAnimationOptions.mapAnimationOptions { duration(if (first) 1800L else 950L) }) } catch (e: Throwable) { }

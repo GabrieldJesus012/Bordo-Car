@@ -849,13 +849,36 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
         val jinfo = if (navigating && (onCar || pv) && here != null && jm != null && jm <= 500.0 && MapRoute.enabled(jctx))
             junctionInfo(here, jm, kindNow, hd) else null
         if (jinfo != null && here != null) {
-            // like the drawing: the sky of the hour on top (the sign and the numbers sit there, never over the turn), the night map
-            // below the horizon, tilted while the turn is far
-            Highway(false, now, Modifier.fillMaxSize())
-            Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.68f)) {
-                JunctionMap(now, jinfo, sky.preset, here, hd, Modifier.fillMaxSize(), textureView = !onCar)
-                Box(Modifier.fillMaxWidth().height(14.dp).background(Brush.verticalGradient(listOf(sky.colors.last().copy(alpha = 0.7f), Color.Transparent))))
+            // the map of the turn over the whole screen, seen from above, with the bar on top and the speed, the sign and the arrival
+            // in a strip at the bottom (the top of the map stays free for the turn)
+            JunctionMap(now, jinfo, sky.preset, here, hd, Modifier.fillMaxSize(), textureView = !onCar, carAt = 0.70, turnAt = 0.24)
+            Box(Modifier.fillMaxWidth().height(padT + 90.dp).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.55f), Color.Transparent))))
+            Box(Modifier.fillMaxWidth().padding(start = padL, top = padT, end = padR)) {
+                BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp), plain = true)
             }
+            Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(padB + 120.dp)
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xF20B1222), Color(0xF20B1222)))))
+            val kmh = Math.round((Drive.speed * 3.6).coerceAtLeast(0.0)).toInt()
+            Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = padL + 12.dp, end = padR + 12.dp, bottom = padB + 6.dp),
+                verticalAlignment = Alignment.Bottom) {
+                Column(Modifier.weight(1f)) {
+                    Label("VELOCIDADE")
+                    Text(buildAnnotatedString { append("$kmh"); pushStyle(SpanStyle(fontSize = 18.sp, color = Color(0xFFCFD8EA), fontWeight = FontWeight.Normal)); append(" km/h"); pop() },
+                        color = Color.White, fontSize = 52.sp, lineHeight = 54.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                }
+                RoadSign(true, dist, rest, wx, city, Modifier.fillMaxWidth(0.4f), 300f, nth = jinfo.nth, kind = kindNow)
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
+                    if (a?.eta != null) {
+                        Label("CHEGADA")
+                        val m = Regex("(\\d+h \\d+|\\d+ min)").find(a.left)?.value
+                        Text(buildAnnotatedString { append(a.eta); if (m != null) { pushStyle(SpanStyle(fontSize = 18.sp, color = Color(0xFFCFD8EA), fontWeight = FontWeight.Normal)); append(" · $m"); pop() } },
+                            color = Color.White, fontSize = 44.sp, lineHeight = 48.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                    }
+                }
+            }
+            if (pv) Text("PRÉVIA", color = Color(0xFF1A0A0A), fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = padT + 70.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFFFFC24E)).padding(horizontal = 8.dp, vertical = 2.dp))
+            return@Box
         } else Highway(navigating && !pv, now, Modifier.fillMaxSize())
         if (pv) Text("PRÉVIA", color = Color(0xFF1A0A0A), fontSize = 13.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = padB + 10.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFFFFC24E)).padding(horizontal = 8.dp, vertical = 2.dp))
