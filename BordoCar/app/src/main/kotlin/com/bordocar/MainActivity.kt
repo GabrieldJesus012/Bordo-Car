@@ -308,6 +308,34 @@ class MainActivity : ComponentActivity() {
                     color = Sub, fontSize = 13.sp)
             }
 
+            Section("Avisos do Waze / Maps (teste)") {
+                var on by remember { mutableStateOf(NavLog.on(this@MainActivity)) }
+                var show by remember { mutableStateOf(false) }
+                if (NavLog.lines == 0) NavLog.lines = NavLog.count(this@MainActivity)
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Registrar tudo o que eles avisam", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Para descobrir se o Waze avisa radar, buraco, polícia… por notificação. Faça uma viagem com o Waze e depois toque em Enviar. Fica só no celular.",
+                            color = Sub, fontSize = 12.sp)
+                    }
+                    androidx.compose.material3.Switch(on, { on = it; prefs.put("navlog", it) })
+                }
+                Text("${NavLog.lines} avisos registrados", color = Sub, fontSize = 13.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(if (show) "Esconder" else "Ver") { show = !show }
+                    Button("Enviar") {
+                        try { startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain")
+                            .putExtra(Intent.EXTRA_SUBJECT, "Avisos do Waze / Maps").putExtra(Intent.EXTRA_TEXT, NavLog.read(this@MainActivity).ifBlank { "(vazio)" }), "Enviar os avisos")) } catch (e: Exception) { }
+                    }
+                    Button("Apagar") { NavLog.clear(this@MainActivity) }
+                }
+                if (show) {
+                    val txt = NavLog.read(this@MainActivity).trimEnd().lines().takeLast(120).joinToString("\n")
+                    Text(txt.ifBlank { "Nada ainda." }, color = Color(0xFFCFD8EA), fontSize = 11.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color(0xFF0B1222)).padding(10.dp))
+                }
+            }
+
             Section("Android Auto") {
                 Text("Para o Bordo Car aparecer no carro: no Android Auto, ative as configurações de desenvolvedor (toque 10× em \"Versão\") e ligue \"Fontes desconhecidas\".",
                     color = Sub, fontSize = 13.sp)
