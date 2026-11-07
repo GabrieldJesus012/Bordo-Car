@@ -827,7 +827,9 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
     val (todayM, todayS) = Drive.today()
     val doneM = cur?.first ?: todayM
     val doneS = cur?.second ?: todayS
-    val a = arrival(now, navigating, left, doneM, doneS)
+    // (in the preview: a made-up arrival, 4 minutes from now)
+    val a = if (pv) Arrival(java.text.SimpleDateFormat("HH:mm", BR).format(java.util.Date(now + 4 * 60_000L)), "1,2 km · 4 min", 0.7f)
+        else arrival(now, navigating, left, doneM, doneS)
     val (dist, rest) = if (sim != null) ("${(Math.round(sim.metres / 10.0) * 10)} m" to sim.street)
         else if (navigating) NavNotice.split(NavNotice.title, NavNotice.text) else (null to "")
     val kindNow = if (sim != null) sim.kind else maneuver(NavNotice.title + " " + NavNotice.text)
@@ -868,12 +870,18 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
                 Spacer(Modifier.weight(1f))
                 RoadSign(true, dist, rest, wx, city, Modifier.fillMaxWidth(0.5f), 300f, nth = jinfo.nth, kind = kindNow)
                 Spacer(Modifier.weight(1f))
-                if (a?.eta != null) Column(Modifier.clip(RoundedCornerShape(14.dp)).background(Color(0xCC0B1222)).padding(horizontal = 14.dp, vertical = 8.dp),
+                // the arrival (or, when the app doesn't say it, how long you've been driving)
+                Column(Modifier.clip(RoundedCornerShape(14.dp)).background(Color(0xCC0B1222)).padding(horizontal = 14.dp, vertical = 8.dp),
                     horizontalAlignment = Alignment.End) {
-                    Label("CHEGADA")
-                    Text(a.eta, color = Color.White, fontSize = 40.sp, lineHeight = 44.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
-                    val m = Regex("(\\d+h \\d+|\\d+ min)").find(a.left)?.value
-                    if (m != null) Text("em $m", color = Color(0xFFCFD8EA), fontSize = 14.sp)
+                    if (a?.eta != null) {
+                        Label("CHEGADA")
+                        Text(a.eta, color = Color.White, fontSize = 40.sp, lineHeight = 44.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                        val m = Regex("(\\d+h \\d+|\\d+ min)").find(a.left)?.value
+                        if (m != null) Text("em $m", color = Color(0xFFCFD8EA), fontSize = 14.sp)
+                    } else {
+                        Label("DIRIGINDO HÁ")
+                        Text(fmtMin((doneS / 60L).toInt()), color = Color.White, fontSize = 40.sp, lineHeight = 44.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                    }
                 }
             }
             if (NowPlaying.title.isNotBlank()) Text("♪ " + NowPlaying.title + (if (NowPlaying.artist.isNotBlank()) " — " + NowPlaying.artist else ""),
@@ -908,6 +916,9 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
                         val m = Regex("(\\d+h \\d+|\\d+ min)").find(a.left)?.value
                         Text(buildAnnotatedString { append(a.eta); if (m != null) { pushStyle(SpanStyle(fontSize = 18.sp, color = Color(0xFFCFD8EA), fontWeight = FontWeight.Normal)); append(" · $m"); pop() } },
                             color = Color.White, fontSize = 44.sp, lineHeight = 48.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                    } else {
+                        Label("DIRIGINDO HÁ")
+                        Text(fmtMin((doneS / 60L).toInt()), color = Color.White, fontSize = 44.sp, lineHeight = 48.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
                     }
                 }
             }
