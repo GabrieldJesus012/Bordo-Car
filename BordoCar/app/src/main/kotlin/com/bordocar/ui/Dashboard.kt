@@ -890,6 +890,64 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
             if (pv) Text("PRÉVIA", color = Color(0xFF1A0A0A), fontSize = 13.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(end = padR + 12.dp, bottom = padB + 10.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFFFFC24E)).padding(horizontal = 8.dp, vertical = 2.dp))
             return@Box
+        } else Highway(navigating && !pv, now, Modifier.fillMaxSize())
+        if (pv) Text("PRÉVIA", color = Color(0xFF1A0A0A), fontSize = 13.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = padB + 10.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFFFFC24E)).padding(horizontal = 8.dp, vertical = 2.dp))
+        Box(Modifier.fillMaxWidth().height(padT + 90.dp).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.35f), Color.Transparent))))
+        Column(Modifier.fillMaxSize().padding(start = padL, top = padT, end = padR, bottom = padB), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp), plain = true)
+          Box(Modifier.fillMaxWidth().weight(1f)) {
+          Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            // (the trip's line steps aside while the map of the turn is up)
+            if (jinfo == null) Timeline(now, navigating, a, doneM, dist, Modifier.fillMaxWidth().height(82.dp))
+            BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 14.dp)) {
+                val h = maxHeight.value
+                val big = (h * 0.3f).coerceIn(36f, 110f)
+                val kmh = Math.round((Drive.speed * 3.6).coerceAtLeast(0.0)).toInt()
+                val avg = if (doneS >= 60) Math.round(doneM / 1000.0 / (doneS / 3600.0)).toInt() else null
+                // speed
+                Column(Modifier.align(Alignment.TopStart).padding(top = 6.dp)) {
+                    Label("VELOCIDADE")
+                    Text("$kmh", color = Color.White, fontSize = big.sp, lineHeight = (big * 1.02f).sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                    Text("km/h" + (if (avg != null) " · média $avg" else ""), color = Color(0xFFC9D6F2), fontSize = (big * 0.18f).coerceIn(14f, 22f).sp)
+                }
+                // arrival, driving time
+                Column(Modifier.align(Alignment.TopEnd).padding(top = 6.dp), horizontalAlignment = Alignment.End) {
+                    val mins = (doneS / 60L).toInt()
+                    if (a?.eta != null) {
+                        Label("CHEGADA")
+                        Text(a.eta, color = Color.White, fontSize = (big * 0.78f).sp, lineHeight = (big * 0.82f).sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                        val m = Regex("(\\d+h \\d+|\\d+ min)").find(a.left)?.value
+                        if (m != null) Text("em $m", color = Color(0xFFC9D6F2), fontSize = (big * 0.18f).coerceIn(14f, 22f).sp)
+                    }
+                    Text("DIRIGINDO HÁ", color = Lbl, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp, modifier = Modifier.padding(top = 14.dp))
+                    Text(fmtMin(mins), color = Color.White, fontSize = (big * 0.36f).coerceIn(20f, 40f).sp, fontWeight = FontWeight.ExtraBold)
+                    if (mins >= 120) Text("☕ hora de uma pausa?", color = Color(0xFFFFC24E), fontSize = 15.sp)
+                }
+                // the green sign over the road
+                RoadSign(navigating, dist, rest, wx, city, Modifier.align(Alignment.TopCenter).fillMaxWidth(0.36f), h,
+                    nth = jinfo?.nth, kind = if (jinfo != null) kindNow else null)
+                // the song, small
+                if (NowPlaying.title.isNotBlank()) Text("♪ " + NowPlaying.title + (if (NowPlaying.artist.isNotBlank()) " — " + NowPlaying.artist else ""),
+                    color = Color(0xFFC9D6F2), fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth(0.3f).padding(bottom = 6.dp))
+            }
+          }
+          }
+        }
+    }
+}
+
+/** The trip as a line: where it started, the car where you are, the next turn, the chequered flag at the end. */
+@Composable
+private fun Timeline(now: Long, navigating: Boolean, a: Arrival?, doneM: Double, dist: String?, modifier: Modifier) {
+    val fmt = java.text.SimpleDateFormat("HH:mm", BR)
+    Box(modifier.clip(RoundedCornerShape(16.dp)).background(Color(0x990B1222)).border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(16.dp)).padding(horizontal = 22.dp, vertical = 8.dp)) {
+        if (a == null) {
+            Text(if (navigating) "${NavNotice.app.ifBlank { "O app" }} não informa a chegada · rota há ${fmtMin(((now - NavNotice.startedAt).coerceAtLeast(0L) / 60_000L).toInt())}"
+                else "Sem rota · escolha o destino no Waze ou no Google Maps", color = Sub, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.align(Alignment.CenterStart))
+            return@Box
         }
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
             Row(Modifier.fillMaxWidth()) {
