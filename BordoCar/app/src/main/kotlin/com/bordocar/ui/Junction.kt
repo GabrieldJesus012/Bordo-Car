@@ -154,7 +154,7 @@ private fun styleJson(preset: String) = org.json.JSONObject()
  */
 @Composable
 fun JunctionMap(now: Long, info: JunctionInfo, preset: String, here0: LL, heading: Double?, modifier: Modifier, textureView: Boolean = false,
-                carAt: Double = 0.88, turnAt: Double = 0.2, routeColor: String = "#3D8BFF", caseColor: String = "#0B2A66",
+                carAt: Double = 0.88, turnAt: Double = 0.2, carX: Double = 0.5, routeColor: String = "#3D8BFF", caseColor: String = "#0B2A66",
                 lineScale: Double = 1.0, minSpanM: Double = 20.0, maxZoom: Double = 18.6, roundBrand: Boolean = false) {
     val ls = lineScale
     val ctx = LocalContext.current
@@ -247,7 +247,10 @@ fun JunctionMap(now: Long, info: JunctionInfo, preset: String, here0: LL, headin
         val brg = if (!near) toTurn else (hdg ?: toTurn)
         val hDp = (mv.height / mv.resources.displayMetrics.density).coerceAtLeast(if (roundBrand) 80f else 150f)
         val mpp = (if (near) maxOf(60.0, minSpanM) else d.coerceAtLeast(minSpanM)) / (hDp * span)
-        val look = MapRoute.ahead(here, brg, (carAt - 0.5) * hDp * mpp)
+        val look0 = MapRoute.ahead(here, brg, (carAt - 0.5) * hDp * mpp)
+        // (you and the turn to one side of the screen: the middle of the map moves the other way)
+        val wDp = mv.width / mv.resources.displayMetrics.density
+        val look = if (carX == 0.5 || wDp <= 0f) look0 else MapRoute.ahead(look0, brg - 90.0, (carX - 0.5) * wDp * mpp)
         val zoom = (ln(40_075_016.686 * cos(Math.toRadians(here.lat)) / (512.0 * mpp)) / ln(2.0)).coerceIn(14.5, maxZoom)
         // (in the round map) the Mapbox logo and its ⓘ at the bottom, in the middle, where the circle is wide enough
         if (roundBrand && !branded && mv.height > 0) {
