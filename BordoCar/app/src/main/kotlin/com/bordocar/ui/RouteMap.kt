@@ -119,7 +119,7 @@ fun RouteMapScreen(now: Long, padL: Dp, padT: Dp, padR: Dp, padB: Dp) {
                 if (trips.isEmpty()) Text(if (week) "Nenhuma viagem nesta semana" else "Nenhuma viagem hoje", color = Color(0xFFC9D6F2), fontSize = 14.sp)
             }
         }
-        Text("© OpenStreetMap · © CARTO", color = Color(0x99FFFFFF), fontSize = 11.sp, modifier = Modifier.align(Alignment.BottomEnd).padding(end = padR + 10.dp, bottom = padB + 6.dp))
+        MapCredits(Modifier.align(Alignment.BottomEnd).padding(end = padR + 10.dp, bottom = padB + 6.dp))
     }
 }
 
@@ -155,7 +155,7 @@ fun PhoneRouteMap(trips: List<Trip>, title: String, onClose: () -> Unit) {
             if (loaded && drawn.isEmpty()) Text("Essa viagem é de antes das rotas serem guardadas: as rotas aparecem a partir das próximas viagens.",
                 color = Color(0xFFC9D6F2), fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xCC101828)).padding(10.dp))
         }
-        Text("© OpenStreetMap · © CARTO", color = Color(0x99FFFFFF), fontSize = 11.sp, modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp))
+        MapCredits(Modifier.align(Alignment.BottomEnd).padding(10.dp))
     }
 }
 
@@ -235,17 +235,43 @@ private fun my(lat: Double, z: Int, tile: Float): Float {
     return ((1.0 - ln(tan(r) + 1.0 / cos(r)) / PI) / 2.0 * 2.0.pow(z) * tile).toFloat()
 }
 
-/** One map tile: from the phone's cache, or downloaded (and kept for next time). */
+/**
+ * One map tile: from the phone's cache, or downloaded (and kept for next time). Mapbox's dark map with the key of the turn map (CARTO
+ * started asking for a key of its own and covers its map with "API KEY REQUIRED"); CARTO only when there's no Mapbox key.
+ */
 private fun loadTile(ctx: android.content.Context, z: Int, x: Int, y: Int): ImageBitmap? {
-    val f = File(File(ctx.cacheDir, "tiles").apply { mkdirs() }, "${z}_${x}_$y.png")
+    val tok = com.bordocar.MapRoute.token(ctx)
+    val mb = tok.startsWith("pk.")
+    // the old tiles (CARTO, now with the "API KEY REQUIRED" over them) go away
+    if (!oldGone) { oldGone = true; try { File(ctx.cacheDir, "tiles").deleteRecursively() } catch (e: Exception) { } }
+    val f = File(File(ctx.cacheDir, if (mb) "tiles-mapbox" else "tiles-carto").apply { mkdirs() }, "${z}_${x}_$y.png")
     try {
         if (!f.exists() || f.length() == 0L) {
             val sub = "abcd"[(x + y) % 4]
-            val c = URL("https://$sub.basemaps.cartocdn.com/dark_all/$z/$x/$y@2x.png").openConnection() as HttpURLConnection
+            val url = if (mb) "https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/256/$z/$x/$y@2x?access_token=$tok"
+                      else "https://$sub.basemaps.cartocdn.com/dark_all/$z/$x/$y@2x.png"
+            val c = URL(url).openConnection() as HttpURLConnection
             c.connectTimeout = 8000; c.readTimeout = 8000
             c.setRequestProperty("User-Agent", "BordoCar/1.0 (Android)")
-            try { f.writeBytes(c.inputStream.readBytes()) } finally { c.disconnect() }
+            try { if (c.responseCode != 200) return null; f.writeBytes(c.inputStream.readBytes()) } finally { c.disconnect() }
         }
         return BitmapFactory.decodeFile(f.path)?.asImageBitmap()
     } catch (e: Exception) { try { f.delete() } catch (x: Exception) { }; return null }
+}
+
+@Volatile private var oldGone = false
+
+/** The credits under the map: Mapbox's (its logo and text) when its map is used, CARTO's otherwise. */
+@Composable
+private fun MapCredits(modifier: Modifier) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val mb = remember { com.bordocar.MapRoute.token(ctx).startsWith("pk.") }
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        if (mb) {
+            val id = remember { ctx.resources.getIdentifier("mapbox_logo_icon", "drawable", ctx.packageName) }
+            if (id != 0) androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(id), "Mapbox",
+                Modifier.padding(end = 8.dp).height(18.dp))
+        }
+        Text(if (mb) "© Mapbox · © OpenStreetMap" else "© OpenStreetMap · © CARTO", color = Color(0x99FFFFFF), fontSize = 11.sp)
+    }
 }
