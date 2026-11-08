@@ -168,7 +168,9 @@ object MapRoute {
                 ?.takeIf { Math.abs((it.alongM - pos) - metres) < maxOf(150.0, metres * 0.5) }
                 ?.let { return it }
         }
-        return ahead.filter { kind == null || it.kind == kind || kind == "frente" }
+        // the same side is enough (one may call "slight right" what the other calls "right")
+        fun side(k: String?) = when (k) { "direita", "leve-direita" -> 1; "esquerda", "leve-esquerda" -> -1; else -> 0 }
+        return ahead.filter { kind == null || it.kind == kind || kind == "frente" || (side(kind) != 0 && side(it.kind) == side(kind)) }
             .minByOrNull { Math.abs((it.alongM - pos) - metres) }
             ?.takeIf { Math.abs((it.alongM - pos) - metres) < maxOf(80.0, metres * 0.35) }
     }

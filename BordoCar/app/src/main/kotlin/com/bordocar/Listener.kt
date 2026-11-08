@@ -143,6 +143,9 @@ fun arrowKind(b: Bitmap): String? {
     val top = cx(ys.first()..(ys.first() + bh / 3)) ?: return null
     val foot = cx((ys.last() - bh / 3)..ys.last()) ?: return null
     val d = (top - foot) / bw
+    // a ring (Waze's roundabout): even, about as wide as tall, half filled (the destination pin is almost all filled, an arrow little)
+    val fill = m.sumOf { r -> r.count { it } } / (bw * bh)
+    if (Math.abs(d) < 0.12 && bw / bh in 0.8..1.25 && fill in 0.3..0.62) return "rotatoria"
     return when {
         d > 0.28 -> "direita"
         d > 0.12 -> "leve-direita"
