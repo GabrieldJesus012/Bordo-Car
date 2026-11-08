@@ -57,9 +57,11 @@ object MapRoute {
      * the turn the notice speaks of (straight ahead [metres], then a bit to its side). Mapbox follows the real streets, so its route
      * gives the real spot of the turn and the streets before it, to count them. Once per notice, at most every 20 s.
      */
-    fun requestNear(ctx: Context, here: LL, heading: Double?, metres: Double, kind: String?, key: String) {
+    fun requestNear(ctx: Context, here: LL, heading: Double?, metres: Double, kind: String?, key: String, street: String? = null) {
         if (!enabled(ctx) || heading == null) return
         if (target != null && points.isNotEmpty() && position(here).second < 60.0) return      // the Bordo route is good
+        // the route there already has this turn: keep it (asking again near the turn gave a worse one, and the map went away)
+        if (points.isNotEmpty() && position(here).second < 40.0 && next(here, metres, kind, street) != null) { miniKey = key; return }
         val now = System.currentTimeMillis()
         if (key == miniKey && now - miniAt < 20_000L) return
         if (now - miniAt < 8_000L) return
@@ -152,15 +154,30 @@ object MapRoute {
      * The turn the navigation notice speaks of: on Mapbox's route, the next turn ahead of you about [metres] away (and of the same
      * kind when it's known); null when there's no route, you're off it, or none fits.
      */
-    fun next(here: LL, metres: Double?, kind: String?): Turn? {
+    fun next(here: LL, metres: Double?, kind: String?, street: String? = null): Turn? {
         val (pos, off) = position(here)
         if (points.isEmpty() || off > 60.0) return null
         val ahead = turns.filter { it.alongM > pos + 5.0 }
         if (ahead.isEmpty()) return null
         if (metres == null) return ahead.first()
+        // the street the notice names (Waze only says the street, not the way): the turn into it, even if the distance is a bit off
+        if (!street.isNullOrBlank()) {
+            val s = streetKey(street)
+            ahead.filter { val n = streetKey(it.street); n.length >= 3 && (s.contains(n) || n.contains(s) && s.length >= 3) }
+                .minByOrNull { Math.abs((it.alongM - pos) - metres) }
+                ?.takeIf { Math.abs((it.alongM - pos) - metres) < maxOf(150.0, metres * 0.5) }
+                ?.let { return it }
+        }
         return ahead.filter { kind == null || it.kind == kind || kind == "frente" }
             .minByOrNull { Math.abs((it.alongM - pos) - metres) }
             ?.takeIf { Math.abs((it.alongM - pos) - metres) < maxOf(80.0, metres * 0.35) }
+    }
+
+    /** A street's name for comparing: no accents, no "Rua", "Av." and the like. */
+    fun streetKey(s: String): String {
+        val a = java.text.Normalizer.normalize(s.lowercase(), java.text.Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
+        return a.replace(Regex("\\b(r|rua|av|avenida|tv|travessa|rod|rodovia|pc|praca|al|alameda|estr|estrada|vire|a|na|no|em|para|direita|esquerda|siga|pela|pelo)\\b\\.?"), " ")
+            .replace(Regex("[^a-z0-9 ]"), " ").replace(Regex("\\s+"), " ").trim()
     }
 
     /** The route from about [backM] before to [aheadM] after the place [fromM] along it. */

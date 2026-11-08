@@ -140,12 +140,15 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
     val mapHd = sim?.heading ?: Drive.heading
     val (tDist, tRest) = NavNotice.split(turnTitle, turnText)
     val jm = if (sim != null) sim.metres else tDist?.let { turnMetres(it) }
-    val jKind = if (sim != null) sim.kind else if (sample) "direita" else maneuver(NavNotice.title + " " + NavNotice.text)
+    val jKind0 = if (sim != null) sim.kind else if (sample) "direita" else (maneuver(NavNotice.title + " " + NavNotice.text) ?: NavNotice.iconKind)
     if (here != null && realRoute && !preview) MapRoute.check(ctx.applicationContext, here)
     if (here != null && realRoute && !preview && onCar && jm != null && jm <= 700.0)
-        MapRoute.requestNear(ctx.applicationContext, here, mapHd, jm, jKind, NavNotice.key + NavNotice.text)
-    val jinfo = if (mapOk && here != null && jm != null && jm <= 500.0 && ((realRoute && (onCar || preview)) || sim != null))
-        junctionInfo(here, jm, jKind, mapHd, sim?.turn) else null
+        MapRoute.requestNear(ctx.applicationContext, here, mapHd, jm, jKind0, NavNotice.key + NavNotice.text, tRest)
+    val jinfo = if (mapOk && here != null && ((realRoute && (onCar || preview)) || sim != null))
+        junctionFor(here, jm, jKind0, mapHd, sim?.turn, tRest) else null
+    // (a turn kept on the map after the notice moved on: its own way and distance)
+    val jKind = if (jinfo != null && (jinfo.held || jKind0 == null)) jinfo.kind ?: jKind0 else jKind0
+    val jDist = jinfo?.takeIf { it.held }?.let { "${Math.round(it.aheadM / 10.0) * 10} m" } ?: tDist
 
     Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color(0xFF2A1012), Color(0xFF0E0808), Color(0xFF060404)), center = Offset(750f, 0f), radius = 1900f))
         .drawBehind {
@@ -257,9 +260,9 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
                                 jKind == "frente" -> "Siga em frente"
                                 else -> tRest
                             }
-                            val street = jinfo.street.ifBlank { if (title != tRest) tRest else "" }
+                            val street = jinfo.street.ifBlank { if (title != tRest && !jinfo.held) tRest else "" }
                             Row(Modifier.fillMaxWidth().weight(1f).padding(top = 8.dp), verticalAlignment = Alignment.Bottom) {
-                                TurnBlock(jKind, if (sim != null || sample) null else NavNotice.icon, title, tDist, street,
+                                TurnBlock(jKind, if (sim != null || sample || jinfo.held) null else NavNotice.icon, title, jDist, street,
                                     Modifier.weight(1f).fillMaxHeight().padding(end = 10.dp))
                                 GMeter(gx, gy, Modifier.size(g2.dp))
                             }

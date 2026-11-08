@@ -65,7 +65,7 @@ class Listener : NotificationListenerService() {
         val music = listOf(NowPlaying.artist, NowPlaying.title).filter { it.length >= 3 }
         val subRoute = if (music.any { m -> sub.contains(m, ignoreCase = true) || m.contains(sub.trim(), ignoreCase = true) && sub.trim().length >= 3 }) "" else sub
         NavNotice.title = title.ifBlank { text }; NavNotice.text = if (title.isBlank()) "" else text; NavNotice.sub = subRoute
-        if (icon != null || !sameRoute) NavNotice.icon = icon
+        if (icon != null || !sameRoute) { NavNotice.icon = icon; NavNotice.iconKind = icon?.let { arrowKind(it) } }
         NavNotice.at = System.currentTimeMillis()
     }
 }
@@ -88,6 +88,8 @@ object NavNotice {
     var text by mutableStateOf("")
     var sub by mutableStateOf("")
     var icon by mutableStateOf<Bitmap?>(null)
+    /** The way of the turn read from the notice's arrow picture (Waze only writes the distance and the street, not the way). */
+    @Volatile var iconKind: String? = null
     var at by mutableLongStateOf(0L)
     /** The last navigation notice seen, as it came (shown on the phone, to check what Waze / Maps send). */
     var lastRaw by mutableStateOf("")
@@ -106,7 +108,48 @@ object NavNotice {
         }
         return null to listOf(title, text).filter { it.isNotBlank() }.joinToString(" · ")
     }
-    fun clear() { pkg = ""; key = ""; removedAt = 0L; app = ""; title = ""; text = ""; sub = ""; icon = null; at = 0L }
+    fun clear() { pkg = ""; key = ""; removedAt = 0L; app = ""; title = ""; text = ""; sub = ""; icon = null; iconKind = null; at = 0L }
+}
+
+/** The arrow of a turn picture as a [n]×[n] grid (true = the arrow), or null when it doesn't look like one. */
+fun arrowMask(b: Bitmap, n: Int = 24): Array<BooleanArray>? = try {
+    val s = Bitmap.createScaledBitmap(b, n, n, true)
+    val px = IntArray(n * n); s.getPixels(px, 0, n, 0, 0, n, n)
+    // drawn over transparency (the usual): the arrow is what's opaque; otherwise what differs from the corner's colour
+    val clear = px.count { android.graphics.Color.alpha(it) < 40 } > n * n / 5
+    val c0 = px[0]
+    fun diff(c: Int) = Math.abs(android.graphics.Color.red(c) - android.graphics.Color.red(c0)) + Math.abs(android.graphics.Color.green(c) - android.graphics.Color.green(c0)) +
+        Math.abs(android.graphics.Color.blue(c) - android.graphics.Color.blue(c0))
+    val m = Array(n) { y -> BooleanArray(n) { x -> val c = px[y * n + x]; if (clear) android.graphics.Color.alpha(c) > 120 else diff(c) > 150 } }
+    val on = m.sumOf { r -> r.count { it } }
+    if (on < n * n / 40 || on > n * n * 7 / 10) null else m
+} catch (e: Exception) { null }
+
+/**
+ * Which way the arrow turns: for "↱" the top of the arrow lies to the right of its foot, for "↰" to the left; a straight one is even.
+ * Only right / left (and slight) are told: a roundabout or a U-turn picture gives null.
+ */
+fun arrowKind(b: Bitmap): String? {
+    val m = arrowMask(b) ?: return null
+    val n = m.size
+    val ys = (0 until n).filter { y -> m[y].any { it } }; if (ys.size < 4) return null
+    val xs = (0 until n).filter { x -> (0 until n).any { y -> m[y][x] } }
+    val bw = (xs.last() - xs.first() + 1).toDouble(); val bh = ys.last() - ys.first() + 1
+    fun cx(rows: IntRange): Double? {
+        var sum = 0.0; var k = 0
+        for (y in rows) for (x in 0 until n) if (m[y][x]) { sum += x; k++ }
+        return if (k == 0) null else sum / k
+    }
+    val top = cx(ys.first()..(ys.first() + bh / 3)) ?: return null
+    val foot = cx((ys.last() - bh / 3)..ys.last()) ?: return null
+    val d = (top - foot) / bw
+    return when {
+        d > 0.28 -> "direita"
+        d > 0.12 -> "leve-direita"
+        d < -0.28 -> "esquerda"
+        d < -0.12 -> "leve-esquerda"
+        else -> null
+    }
 }
 
 /**
@@ -117,6 +160,7 @@ object NavNotice {
 object NavLog {
     var lines by androidx.compose.runtime.mutableIntStateOf(0)
     private val lastShape = HashMap<String, String>()
+    @Volatile private var lastArt = ""
     private fun file(ctx: Context) = java.io.File(ctx.filesDir, "avisos-nav.txt")
     fun on(ctx: Context) = Prefs(ctx).b("navlog", true)
     private val fmt = java.text.SimpleDateFormat("dd/MM HH:mm:ss", java.util.Locale("pt", "BR"))
@@ -138,11 +182,25 @@ object NavLog {
             if (n.flags and Notification.FLAG_ONGOING_EVENT != 0) append(" fixa")
             append(" id=").append(sbn.id)
         }
-        val body = parts.joinToString(" | ") { "${it.first}: ${it.second}" }
+        var body = parts.joinToString(" | ") { "${it.first}: ${it.second}" }
+        val pic: Bitmap? = try {
+            n.getLargeIcon()?.loadDrawable(ctx)?.let { d ->
+                val w = d.intrinsicWidth.coerceIn(1, 256); val h = d.intrinsicHeight.coerceIn(1, 256)
+                Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also { b -> val c = android.graphics.Canvas(b); d.setBounds(0, 0, w, h); d.draw(c) }
+            }
+        } catch (e: Exception) { null }
+        var art = ""
+        if (pic != null) {
+            body += " | seta: " + (arrowKind(pic) ?: "?")
+            val mk = arrowMask(pic, 16)
+            if (mk != null) art = mk.joinToString("\n") { r -> "      " + r.joinToString("") { if (it) "#" else "." } }
+        }
         // the same message with other numbers (the metres counting down): already written
         val shape = head + body.replace(Regex("\\d+([.,]\\d+)?"), "#")
         synchronized(lastShape) { if (lastShape[sbn.key] == shape) return; lastShape[sbn.key] = shape }
-        write(ctx, "${fmt.format(java.util.Date())}  $head\n    $body")
+        val newArt = art.isNotBlank() && art != lastArt
+        if (newArt) lastArt = art
+        write(ctx, "${fmt.format(java.util.Date())}  $head\n    $body" + (if (newArt) "\n$art" else ""))
     }
     fun removed(ctx: Context, sbn: StatusBarNotification) {
         if (!on(ctx)) return

@@ -832,7 +832,7 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
         else arrival(now, navigating, left, doneM, doneS)
     val (dist, rest) = if (sim != null) ("${(Math.round(sim.metres / 10.0) * 10)} m" to sim.street)
         else if (navigating) NavNotice.split(NavNotice.title, NavNotice.text) else (null to "")
-    val kindNow = if (sim != null) sim.kind else maneuver(NavNotice.title + " " + NavNotice.text)
+    val kind0 = if (sim != null) sim.kind else (maneuver(NavNotice.title + " " + NavNotice.text) ?: NavNotice.iconKind)
     // the bar takes the colours of the sky of the hour (day, sunset, night), a little darker so the text reads well
     val sky = skyAt(now, Drive.pos)
     fun dark(c: Color, f: Float) = androidx.compose.ui.graphics.lerp(c, Color.Black, f)
@@ -847,9 +847,12 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
         if (here != null && !pv) MapRoute.check(jctx.applicationContext, here)
         // a route started in Waze / Maps: Mapbox's way to just past the turn, to place it on the real streets and count them
         if (here != null && !pv && navigating && onCar && jm != null && jm <= 700.0)
-            MapRoute.requestNear(jctx.applicationContext, here, hd, jm, kindNow, NavNotice.key + NavNotice.text)
-        val jinfo = if (navigating && (onCar || pv) && here != null && jm != null && jm <= 500.0 && MapRoute.enabled(jctx))
-            junctionInfo(here, jm, kindNow, hd, sim?.turn) else null
+            MapRoute.requestNear(jctx.applicationContext, here, hd, jm, kind0, NavNotice.key + NavNotice.text, rest)
+        val jinfo = if (navigating && (onCar || pv) && here != null && MapRoute.enabled(jctx))
+            junctionFor(here, jm, kind0, hd, sim?.turn, rest) else null
+        // (a turn kept on the map after the notice moved on: its own way and distance)
+        val kindNow = if (jinfo != null && (jinfo.held || kind0 == null)) jinfo.kind ?: kind0 else kind0
+        val jdist = jinfo?.takeIf { it.held }?.let { "${Math.round(it.aheadM / 10.0) * 10} m" } ?: dist
         if (jinfo != null && here != null && com.bordocar.Prefs(jctx).s("jstyle", "D") == "B") {
             // (style B) the map over the whole screen with the sky of the hour on top, see-through, fading into the map; the sign,
             // the speed and the arrival up there in the sky, the turn in the lower half
@@ -868,7 +871,7 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
                     Text("km/h" + (if (avg != null) " · média $avg" else ""), color = Color(0xFFCFD8EA), fontSize = 14.sp)
                 }
                 Spacer(Modifier.weight(1f))
-                RoadSign(true, dist, rest, wx, city, Modifier.fillMaxWidth(0.5f), 300f, nth = jinfo.nth, kind = kindNow)
+                RoadSign(true, jdist, rest, wx, city, Modifier.fillMaxWidth(0.5f), 300f, nth = jinfo.nth, kind = kindNow)
                 Spacer(Modifier.weight(1f))
                 // the arrival (or, when the app doesn't say it, how long you've been driving)
                 Column(Modifier.clip(RoundedCornerShape(14.dp)).background(Color(0xCC0B1222)).padding(horizontal = 14.dp, vertical = 8.dp),
@@ -909,7 +912,7 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
                     Text(buildAnnotatedString { append("$kmh"); pushStyle(SpanStyle(fontSize = 18.sp, color = Color(0xFFCFD8EA), fontWeight = FontWeight.Normal)); append(" km/h"); pop() },
                         color = Color.White, fontSize = 52.sp, lineHeight = 54.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
                 }
-                RoadSign(true, dist, rest, wx, city, Modifier.fillMaxWidth(0.4f), 300f, nth = jinfo.nth, kind = kindNow)
+                RoadSign(true, jdist, rest, wx, city, Modifier.fillMaxWidth(0.4f), 300f, nth = jinfo.nth, kind = kindNow)
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
                     if (a?.eta != null) {
                         Label("CHEGADA")
@@ -1174,7 +1177,7 @@ private fun Highway(navigating: Boolean, now: Long, modifier: Modifier) {
         for (sg in listOf(-1f, 1f)) drawLine(Color(0xFFF2C230), Offset(cx + sg * 2f, horizon), Offset(cx + sg * w * 0.011f, hh), strokeWidth = 4f)
         // the arrow painted on the asphalt: drawn by Bordo Car for the manoeuvre the app's notice speaks of, in perspective
         if (navigating) {
-            val kind = maneuver(NavNotice.title + " " + NavNotice.text)
+            val kind = maneuver(NavNotice.title + " " + NavNotice.text) ?: NavNotice.iconKind
             val v0 = hh * 0.58f; val vh = hh * 0.38f
             val topW = w * 0.15f; val botW = w * 0.24f
             fun pt(u: Float, v: Float) = Offset(cx + (u - 0.5f) * (topW + (botW - topW) * v), v0 + v * vh)
