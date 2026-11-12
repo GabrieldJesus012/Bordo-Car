@@ -55,7 +55,7 @@ class JunctionInfo(val turnAt: LL, val line: List<LL>, val numbered: List<LL>, v
                    /** You, put on the route (the GPS wobbles a few metres), and the way the route goes there. */
                    val me: LL, val roadBrg: Double?,
                    /** The turn's way, how far it is along the route, and whether it's kept after the notice moved on to the next one. */
-                   val kind: String? = null, val aheadM: Double = 0.0, val held: Boolean = false)
+                   val kind: String? = null, val aheadM: Double = 0.0, val held: Boolean = false, val turn: MapRoute.Turn? = null)
 
 private fun ahead(p: LL, deg: Double, m: Double) = MapRoute.ahead(p, deg, m)
 
@@ -105,20 +105,22 @@ object JunctionPreview {
  */
 fun junctionInfo(here: LL, metres: Double, kind: String?, heading: Double?, forced: MapRoute.Turn? = null, street: String? = null,
                  held: Boolean = false): JunctionInfo? {
-    val t = forced ?: MapRoute.next(here, metres, kind, street) ?: return null
+    val t = forced ?: MapRoute.wazeTurn(here, metres, kind, street) ?: return null
     val (pos, off) = MapRoute.position(here)
-    val line = MapRoute.slice(pos - 30.0, t.alongM + 120.0)
+    // a turn placed where Waze / Maps says: the route up to it, then a bit of the street it goes into
+    val line = if (t.exitBrg != null) MapRoute.slice(pos - 30.0, t.alongM) + listOf(t.at, ahead(t.at, t.exitBrg, 90.0))
+               else MapRoute.slice(pos - 30.0, t.alongM + 120.0)
     if (line.size < 2) return null
     val crossings = t.sideStreets.filter { MapRoute.position(it).first in (pos + 15.0)..(t.alongM - 8.0) }
     val numbered = crossings + t.at
     val onRoad = MapRoute.pointAt(pos)
     val me = if (onRoad != null && off < 35.0) onRoad.first else here
     return JunctionInfo(t.at, line, if (numbered.size >= 2) numbered else emptyList(), if (numbered.size >= 2) numbered.size else null, t.street,
-        me, onRoad?.second ?: heading, t.kind, (t.alongM - pos).coerceAtLeast(0.0), held)
+        me, onRoad?.second ?: heading, t.kind, (t.alongM - pos).coerceAtLeast(0.0), held, t)
 }
 
 /** The last turn shown on the map, kept until you've made it (Waze moves on to the next instruction some metres before). */
-private object JunctionHold { @Volatile var at: LL? = null; @Volatile var lastAt = 0L }
+private object JunctionHold { @Volatile var turn: MapRoute.Turn? = null; @Volatile var route: List<LL>? = null; @Volatile var lastAt = 0L }
 
 /**
  * The turn for the map: the one of the notice once it's 500 m away or less; and when the notice already speaks of the next one, the
@@ -127,12 +129,11 @@ private object JunctionHold { @Volatile var at: LL? = null; @Volatile var lastAt
 fun junctionFor(here: LL, metres: Double?, kind: String?, heading: Double?, forced: MapRoute.Turn?, street: String?): JunctionInfo? {
     val now = System.currentTimeMillis()
     val ji = if (metres != null && metres <= 500.0) junctionInfo(here, metres, kind, heading, forced, street) else null
-    if (ji != null) { JunctionHold.at = ji.turnAt; JunctionHold.lastAt = now; return ji }
-    val h = JunctionHold.at ?: return null
-    if (now - JunctionHold.lastAt > 20_000L) { JunctionHold.at = null; return null }
-    val t = MapRoute.turns.minByOrNull { dist(it.at, h) }?.takeIf { dist(it.at, h) < 30.0 } ?: return null
+    if (ji != null) { JunctionHold.turn = ji.turn; JunctionHold.route = MapRoute.points; JunctionHold.lastAt = now; return ji }
+    val t = JunctionHold.turn ?: return null
+    if (now - JunctionHold.lastAt > 20_000L || JunctionHold.route !== MapRoute.points) { JunctionHold.turn = null; return null }
     val (pos, off) = MapRoute.position(here)
-    if (off > 50.0 || pos > t.alongM + 20.0) { JunctionHold.at = null; return null }
+    if (off > 50.0 || pos > t.alongM + 20.0) { JunctionHold.turn = null; return null }
     return junctionInfo(here, (t.alongM - pos).coerceAtLeast(0.0), t.kind, heading, t, held = true)
 }
 

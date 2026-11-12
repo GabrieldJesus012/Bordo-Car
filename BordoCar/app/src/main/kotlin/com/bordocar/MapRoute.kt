@@ -16,7 +16,54 @@ object MapRoute {
     fun enabled(ctx: Context): Boolean = Prefs(ctx).b("junction", true) && token(ctx).startsWith("pk.")
 
     /** A turn of the route: where it is, which way, the street, and the crossings with a street on that side before it. */
-    class Turn(val at: LL, val kind: String, val street: String, val sideStreets: List<LL>, val alongM: Double)
+    class Turn(val at: LL, val kind: String, val street: String, val sideStreets: List<LL>, val alongM: Double,
+               /** For a turn placed where Waze / Maps says (not one of Mapbox's): the way of the street it goes into. */
+               val exitBrg: Double? = null)
+
+    /** A crossing on the route: where, how far along it, the way you come in and the ways of the streets that leave it. */
+    class Cross(val at: LL, val alongM: Double, val travel: Double, val outs: DoubleArray)
+    @Volatile var crossings: List<Cross> = emptyList(); private set
+
+    private fun sideOf(k: String?) = when (k) { "direita", "leve-direita" -> 1; "esquerda", "leve-esquerda" -> -1; else -> 0 }
+
+    /** The street that leaves crossing [x] on [side] (1 right, -1 left): its way, or null when there's none. */
+    fun branch(x: Cross, side: Int): Double? {
+        var best: Double? = null; var bestD = 999.0
+        for (b in x.outs) {
+            val rel = ((b - x.travel) + 360.0) % 360.0
+            val ok = if (side > 0) rel in 25.0..155.0 else rel in 205.0..335.0
+            val d = Math.abs(rel - (if (side > 0) 90.0 else 270.0))
+            if (ok && d < bestD) { bestD = d; best = b }
+        }
+        return best
+    }
+
+    /**
+     * The turn of the notice, where Waze / Google Maps put it: about [metres] ahead on the road you're on, to its side. Mapbox's own
+     * turn when it's the same (same side, same spot); otherwise the crossing at that distance with a street on that side, even if
+     * Mapbox's route would go straight on there. Null when Mapbox's route already turned off before that spot (it went another way:
+     * a new route is asked), or nothing fits.
+     */
+    @Volatile var disagrees = false; private set
+    fun wazeTurn(here: LL, metres: Double, kind: String?, street: String?): Turn? {
+        val pts = points; if (pts.isEmpty()) return null
+        val (pos, off) = position(here)
+        if (off > 60.0) return null
+        val target = pos + metres
+        val tol = maxOf(35.0, metres * 0.2)
+        val side = sideOf(kind)
+        // Mapbox's route turns off before the spot of the notice: it isn't on the same road as Waze / Maps up to there
+        disagrees = turns.any { it.alongM > pos + 5.0 && it.alongM < target - tol && it.kind in listOf("direita", "esquerda", "retorno", "rotatoria") }
+        if (disagrees) return null
+        val own = turns.filter { it.alongM > pos + 5.0 && Math.abs(it.alongM - target) < tol &&
+            (it.kind == kind || (side != 0 && sideOf(it.kind) == side)) }.minByOrNull { Math.abs(it.alongM - target) }
+        if (own != null) return own
+        if (side == 0) return null
+        val x = crossings.filter { it.alongM > pos + 5.0 && branch(it, side) != null }.minByOrNull { Math.abs(it.alongM - target) }
+            ?.takeIf { Math.abs(it.alongM - target) < tol } ?: return null
+        val before = crossings.filter { it.alongM in (pos + 15.0)..(x.alongM - 8.0) && branch(it, side) != null }.map { it.at }
+        return Turn(x.at, kind ?: "direita", street.orEmpty(), before, x.alongM, branch(x, side))
+    }
 
     @Volatile var points: List<LL> = emptyList(); private set
     private var cum = DoubleArray(0)
@@ -59,9 +106,8 @@ object MapRoute {
      */
     fun requestNear(ctx: Context, here: LL, heading: Double?, metres: Double, kind: String?, key: String, street: String? = null) {
         if (!enabled(ctx) || heading == null) return
-        if (target != null && points.isNotEmpty() && position(here).second < 60.0) return      // the Bordo route is good
-        // the route there already has this turn: keep it (asking again near the turn gave a worse one, and the map went away)
-        if (points.isNotEmpty() && position(here).second < 40.0 && next(here, metres, kind, street) != null) { miniKey = key; return }
+        // the route there already places this turn where Waze / Maps says: keep it (asking again near the turn gave worse ones)
+        if (points.isNotEmpty() && position(here).second < 40.0 && wazeTurn(here, metres, kind, street) != null) { miniKey = key; return }
         val now = System.currentTimeMillis()
         if (key == miniKey && now - miniAt < 20_000L) return
         if (now - miniAt < 8_000L) return
@@ -133,7 +179,21 @@ object MapRoute {
             }
             out.add(Turn(at, kind, st.optString("name"), crossings, along(pts, c, at)))
         }
-        points = pts; cum = c; turns = out
+        // every crossing on the route, to place a turn where Waze / Maps says even when Mapbox would go another way there
+        val xs = ArrayList<Cross>()
+        for (i in 0 until steps.length()) {
+            val ins = steps.getJSONObject(i).optJSONArray("intersections") ?: continue
+            for (k in 0 until ins.length()) {
+                val x = ins.getJSONObject(k)
+                val b = x.optJSONArray("bearings") ?: continue
+                val inI = x.optInt("in", -1); if (inI < 0 || b.length() < 3) continue
+                val l = x.getJSONArray("location"); val at = LL(l.getDouble(1), l.getDouble(0))
+                val outs = DoubleArray(b.length() - 1); var n = 0
+                for (j in 0 until b.length()) if (j != inI) outs[n++] = b.getDouble(j)
+                xs.add(Cross(at, along(pts, c, at), (b.getDouble(inI) + 180.0) % 360.0, outs))
+            }
+        }
+        points = pts; cum = c; turns = out; crossings = xs
     }
 
     private fun along(pts: List<LL>, c: DoubleArray, p: LL): Double {
