@@ -295,6 +295,11 @@ class SettingsScreen(carContext: CarContext) : Screen(carContext) {
         com.bordocar.ui.Themes.load(carContext)
         list.addItem(Row.Builder().setTitle("Tema do painel").addText(com.bordocar.ui.Themes.cur.name + " · toque para trocar")
             .setOnClickListener { com.bordocar.ui.Themes.next(carContext); invalidate() }.build())
+        com.bordocar.ui.CarLook.load(carContext)
+        list.addItem(Row.Builder().setTitle("Adaptar ao carro").addText("Normal e Estrada no grafite da tela, sem caixas")
+            .setToggle(androidx.car.app.model.Toggle.Builder { on ->
+                com.bordocar.ui.CarLook.set(carContext, on); invalidate()
+            }.setChecked(com.bordocar.ui.CarLook.on).build()).build())
         com.bordocar.ui.Sport.load(carContext)
         list.addItem(Row.Builder().setTitle("Esportivo acima de ${com.bordocar.ui.Sport.ON_KMH} km/h")
             .addText(if (com.bordocar.ui.Sport.enabled) "Ligado" else "Desligado")

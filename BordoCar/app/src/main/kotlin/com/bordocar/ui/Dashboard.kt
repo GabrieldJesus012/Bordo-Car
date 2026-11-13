@@ -158,7 +158,7 @@ private fun Label(text: String, modifier: Modifier = Modifier) =
  */
 @Composable
 fun Dashboard(ctx: Context, actions: DashActions, padL: Dp, padT: Dp, padR: Dp, padB: Dp) {
-    remember { Themes.load(ctx); Sport.load(ctx); Modes.load(ctx); 0 }
+    remember { Themes.load(ctx); Sport.load(ctx); Modes.load(ctx); CarLook.load(ctx); 0 }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -205,11 +205,13 @@ fun Dashboard(ctx: Context, actions: DashActions, padL: Dp, padT: Dp, padR: Dp, 
     }
     val navigating = NavNotice.active(now)
     // the preview of the map of the turn shows Estrada, whatever the mode
-    if (JunctionPreview.active(now)) { RoadDash(now, bat, charging, wx, city, padL, padT, padR, padB); return }
+    if (JunctionPreview.active(now)) { RoadDashLook(now, bat, charging, wx, city, padL, padT, padR, padB); return }
     if (RouteView.show != null && Modes.cur == "normal" && !Sport.showing(now)) { RouteMapScreen(now, padL, padT, padR, padB); return }
     if (Modes.cur == "esportivo" || Sport.showing(now)) { SportDash(now, bat, charging, wx, city, padL, padT, padR, padB); return }
     if (Modes.cur == "musica") { MusicDash(now, bat, charging, wx, city, padL, padT, padR, padB); return }
-    if (Modes.cur == "estrada" || JunctionPreview.active(now)) { RoadDash(now, bat, charging, wx, city, padL, padT, padR, padB); return }
+    if (Modes.cur == "estrada" || JunctionPreview.active(now)) { RoadDashLook(now, bat, charging, wx, city, padL, padT, padR, padB); return }
+    // "Adaptar ao carro": the Normal dashboard flat on the graphite of the car's screen
+    if (CarLook.on) { NormalAdapted(now, bat, charging, wx, city, actions, navigating, padL, padT, padR, padB); return }
 
     Box(Modifier.fillMaxSize().background(Bg)) {
         Column(Modifier.fillMaxSize().padding(start = padL, top = padT, end = padR, bottom = padB), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -235,6 +237,13 @@ fun Dashboard(ctx: Context, actions: DashActions, padL: Dp, padT: Dp, padR: Dp, 
             }
         }
     }
+}
+
+/** Estrada, in the plain type of the car's screen when it's adapted to the car. */
+@Composable
+private fun RoadDashLook(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: String, padL: Dp, padT: Dp, padR: Dp, padB: Dp) {
+    if (CarLook.on) CarType { RoadDash(now, bat, charging, wx, city, padL, padT, padR, padB) }
+    else RoadDash(now, bat, charging, wx, city, padL, padT, padR, padB)
 }
 
 @android.annotation.SuppressLint("MissingPermission")
@@ -858,9 +867,11 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
             // on the left (the driver's side) a column with the sign, the speed and the arrival
             JunctionMap(now, jinfo, sky.preset, here, hd, Modifier.fillMaxSize(), textureView = !onCar, carAt = 0.80, turnAt = 0.26, carX = 0.67)
             Box(Modifier.fillMaxWidth().height(padT + 90.dp).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.55f), Color.Transparent))))
-            Box(Modifier.fillMaxHeight().fillMaxWidth(0.44f).background(Brush.horizontalGradient(0f to Color(0xFF0B1222), 0.72f to Color(0xF20B1222), 1f to Color(0x000B1222))))
+            val col = if (CarLook.on) CarLook.Graphite else Color(0xFF0B1222)
+            Box(Modifier.fillMaxHeight().fillMaxWidth(0.44f).background(Brush.horizontalGradient(0f to col, 0.72f to col.copy(alpha = 0.95f), 1f to col.copy(alpha = 0f))))
             Box(Modifier.fillMaxWidth().padding(start = padL, top = padT, end = padR)) {
-                BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp), plain = true)
+                if (CarLook.on) CarTopLine(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp).padding(start = 16.dp), clock = true)
+                else BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp), plain = true)
             }
             val kmh = Math.round((Drive.speed * 3.6).coerceAtLeast(0.0)).toInt()
             val avg = if (doneS >= 60) Math.round(doneM / 1000.0 / (doneS / 3600.0)).toInt() else null
@@ -891,15 +902,17 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
                 modifier = Modifier.align(Alignment.BottomEnd).padding(end = padR + 12.dp, bottom = padB + 10.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFFFFC24E)).padding(horizontal = 8.dp, vertical = 2.dp))
             return@Box
         } else Highway(navigating && !pv, now, Modifier.fillMaxSize())
+        if (CarLook.on) RoadEdges(padB)
         if (pv) Text("PRÉVIA", color = Color(0xFF1A0A0A), fontSize = 13.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = padB + 10.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFFFFC24E)).padding(horizontal = 8.dp, vertical = 2.dp))
         Box(Modifier.fillMaxWidth().height(padT + 90.dp).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.35f), Color.Transparent))))
         Column(Modifier.fillMaxSize().padding(start = padL, top = padT, end = padR, bottom = padB), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp), plain = true)
+            if (CarLook.on) CarTopLine(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp).padding(start = 16.dp), clock = true)
+            else BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp), plain = true)
           Box(Modifier.fillMaxWidth().weight(1f)) {
           Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             // (the trip's line steps aside while the map of the turn is up)
-            if (jinfo == null) Timeline(now, navigating, a, doneM, dist, Modifier.fillMaxWidth().height(82.dp))
+            if (jinfo == null) Timeline(now, navigating, a, doneM, dist, Modifier.fillMaxWidth().height(82.dp), flat = CarLook.on)
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 14.dp)) {
                 val h = maxHeight.value
                 val big = (h * 0.3f).coerceIn(36f, 110f)
@@ -940,9 +953,10 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
 
 /** The trip as a line: where it started, the car where you are, the next turn, the chequered flag at the end. */
 @Composable
-private fun Timeline(now: Long, navigating: Boolean, a: Arrival?, doneM: Double, dist: String?, modifier: Modifier) {
+private fun Timeline(now: Long, navigating: Boolean, a: Arrival?, doneM: Double, dist: String?, modifier: Modifier, flat: Boolean = false) {
     val fmt = java.text.SimpleDateFormat("HH:mm", BR)
-    Box(modifier.clip(RoundedCornerShape(16.dp)).background(Color(0x990B1222)).border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(16.dp)).padding(horizontal = 22.dp, vertical = 8.dp)) {
+    // flat (adapted to the car): no box, the line straight over the scene
+    Box((if (flat) modifier else modifier.clip(RoundedCornerShape(16.dp)).background(Color(0x990B1222)).border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(16.dp))).padding(horizontal = 22.dp, vertical = 8.dp)) {
         if (a == null) {
             Text(if (navigating) "${NavNotice.app.ifBlank { "O app" }} não informa a chegada · rota há ${fmtMin(((now - NavNotice.startedAt).coerceAtLeast(0L) / 60_000L).toInt())}"
                 else "Sem rota · escolha o destino no Waze ou no Google Maps", color = Sub, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
