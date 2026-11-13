@@ -17,8 +17,8 @@ android {
         // each GitHub build gets a higher version number, so Android always treats a new APK as an update
         val run = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0
         versionCode = 100 + run
-        // 2.0.0 from build 55 on
-        versionName = if (run >= 55) "2.0.${run - 55}" else "1.0.$run"
+        // 2.0.0 from build 55 on, 3.0.0 from build 67 on
+        versionName = if (run >= 67) "3.0.${run - 67}" else if (run >= 55) "2.0.${run - 55}" else "1.0.$run"
         resValue("string", "app_name", "Bordo Car")
         // the repo this is built in (GitHub sets it in Actions): where the app looks for new versions
         buildConfigField("String", "UPDATE_REPO", "\"${System.getenv("GITHUB_REPOSITORY") ?: ""}\"")
