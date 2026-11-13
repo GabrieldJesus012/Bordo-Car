@@ -79,7 +79,8 @@ jobs:
             done
           }
           tapS "Música"; sleep 4; adb exec-out screencap -p > out/7-modo-musica.png
-          tapS "Estrada"; sleep 4; adb exec-out screencap -p > out/8-modo-estrada.png
+          # (Estrada only shows with a route: its preview, with a made-up one)
+          tapS "Ver prévia (16 s)"; sleep 6; adb exec-out screencap -p > out/8-modo-estrada.png; sleep 12
           tapS "Normal"; sleep 2
           adb logcat -d > out/logcat.txt
           grep -E "FATAL EXCEPTION|AndroidRuntime" -A8 out/logcat.txt | head -60 > out/erros.txt || true
