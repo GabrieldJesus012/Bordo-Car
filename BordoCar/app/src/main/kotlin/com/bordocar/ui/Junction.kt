@@ -156,7 +156,9 @@ private fun styleJson(preset: String) = org.json.JSONObject()
 @Composable
 fun JunctionMap(now: Long, info: JunctionInfo, preset: String, here0: LL, heading: Double?, modifier: Modifier, textureView: Boolean = false,
                 carAt: Double = 0.88, turnAt: Double = 0.2, carX: Double = 0.5, routeColor: String = "#3D8BFF", caseColor: String = "#0B2A66",
-                lineScale: Double = 1.0, minSpanM: Double = 20.0, maxZoom: Double = 18.6, roundBrand: Boolean = false) {
+                lineScale: Double = 1.0, minSpanM: Double = 20.0, maxZoom: Double = 18.6, roundBrand: Boolean = false,
+                /** Mapbox's logo and its ⓘ in the top right corner, [brandRightDp] from the edge (away from the speed in the bottom left). */
+                brandTopRight: Boolean = false, brandRightDp: Float = 16f) {
     val ls = lineScale
     val ctx = LocalContext.current
     val token = MapRoute.token(ctx)
@@ -254,6 +256,12 @@ fun JunctionMap(now: Long, info: JunctionInfo, preset: String, here0: LL, headin
         val look = if (carX == 0.5 || wDp <= 0f) look0 else MapRoute.ahead(look0, brg - 90.0, (carX - 0.5) * wDp * mpp)
         val zoom = (ln(40_075_016.686 * cos(Math.toRadians(here.lat)) / (512.0 * mpp)) / ln(2.0)).coerceIn(14.5, maxZoom)
         // (in the round map) the Mapbox logo and its ⓘ at the bottom, in the middle, where the circle is wide enough
+        if (brandTopRight && !branded && mv.height > 0) {
+            branded = true
+            val px = mv.resources.displayMetrics.density
+            try { mv.logo.updateSettings { position = android.view.Gravity.TOP or android.view.Gravity.END; marginTop = 8f * px; marginRight = brandRightDp * px; marginLeft = 0f; marginBottom = 0f } } catch (e: Throwable) { }
+            try { mv.attribution.updateSettings { position = android.view.Gravity.TOP or android.view.Gravity.END; marginTop = 8f * px; marginRight = (brandRightDp + 92f) * px; marginLeft = 0f; marginBottom = 0f } } catch (e: Throwable) { }
+        }
         if (roundBrand && !branded && mv.height > 0) {
             branded = true
             val px = mv.resources.displayMetrics.density

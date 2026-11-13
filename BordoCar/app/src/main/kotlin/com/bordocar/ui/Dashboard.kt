@@ -862,7 +862,8 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         // ---- the left: the road (the sky of the hour), or the map of the turn from 500 m; the speed and the limit in its corner
         Box(Modifier.fillMaxHeight().fillMaxWidth(0.6f).padding(top = padT + 56.dp)) {
-            if (jinfo != null && here != null) JunctionMap(now, jinfo, sky.preset, here, hd, Modifier.fillMaxSize(), textureView = !onCar, carAt = 0.78, turnAt = 0.28)
+            if (jinfo != null && here != null) JunctionMap(now, jinfo, sky.preset, here, hd, Modifier.fillMaxSize(), textureView = !onCar, carAt = 0.78, turnAt = 0.28,
+                brandTopRight = true, brandRightDp = 64f)
             else Highway(navigating && !pv, now, Modifier.fillMaxSize())
             // into the black of the panel on the right
             Box(Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(56.dp).background(Brush.horizontalGradient(listOf(Color.Transparent, Color.Black))))
