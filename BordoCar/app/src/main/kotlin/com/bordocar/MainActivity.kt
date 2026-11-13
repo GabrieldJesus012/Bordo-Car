@@ -254,7 +254,8 @@ class MainActivity : ComponentActivity() {
 
             Section("Tema do painel") {
                 com.bordocar.ui.CarLook.load(this@MainActivity)
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()
+                    .clickable { com.bordocar.ui.CarLook.set(this@MainActivity, !com.bordocar.ui.CarLook.on); scope.launch { scroll.animateScrollTo(0) } }) {
                     Column(Modifier.weight(1f)) {
                         Text("Adaptar ao carro", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                         Text("Normal e Estrada com o fundo grafite da tela do 208, sem caixas, ícones finos e sem a temperatura (o carro já mostra). Esportivo e Música ficam como estão.",
