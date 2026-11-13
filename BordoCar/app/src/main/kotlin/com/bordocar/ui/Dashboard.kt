@@ -207,8 +207,14 @@ fun Dashboard(ctx: Context, actions: DashActions, padL: Dp, padT: Dp, padR: Dp, 
     // the preview of the map of the turn shows Estrada, whatever the mode
     if (JunctionPreview.active(now)) { RoadDashLook(now, bat, charging, wx, city, padL, padT, padR, padB); return }
     if (RouteView.show != null && Modes.cur == "normal" && !Sport.showing(now)) { RouteMapScreen(now, padL, padT, padR, padB); return }
-    if (Modes.cur == "esportivo" || Sport.showing(now)) { SportDash(now, bat, charging, wx, city, padL, padT, padR, padB); return }
-    if (Modes.cur == "musica") { MusicDash(now, bat, charging, wx, city, padL, padT, padR, padB); return }
+    if (Modes.cur == "esportivo" || Sport.showing(now)) {
+        if (CarLook.on) CarType { SportDash(now, bat, charging, wx, city, padL, padT, padR, padB) } else SportDash(now, bat, charging, wx, city, padL, padT, padR, padB)
+        return
+    }
+    if (Modes.cur == "musica") {
+        if (CarLook.on) CarType { MusicDash(now, bat, charging, wx, city, padL, padT, padR, padB) } else MusicDash(now, bat, charging, wx, city, padL, padT, padR, padB)
+        return
+    }
     if (Modes.cur == "estrada" || JunctionPreview.active(now)) { RoadDashLook(now, bat, charging, wx, city, padL, padT, padR, padB); return }
     // "Adaptar ao carro": the Normal dashboard flat on the graphite of the car's screen
     if (CarLook.on) { NormalAdapted(now, bat, charging, wx, city, actions, navigating, padL, padT, padR, padB); return }
@@ -579,20 +585,29 @@ private fun BottomBar(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, 
 
 @Composable
 private fun MusicDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: String, padL: Dp, padT: Dp, padR: Dp, padB: Dp) {
-    Box(Modifier.fillMaxSize().background(Bg)) {
+    // (adapted to the car: on the graphite of the car's screen, white dials, no temperature, the song with no box)
+    val adapt = CarLook.on
+    Box(Modifier.fillMaxSize().then(if (adapt) Modifier else Modifier.background(Bg))) {
+        if (adapt) GraphiteBg(Modifier.fillMaxSize())
         // the track and the car over the whole screen, behind everything (the car stays in the middle of the part under the bar)
-        RoadAndCar(Modifier.fillMaxSize(), top = padT + 74.dp)
+        RoadAndCar(Modifier.fillMaxSize(), top = padT + 74.dp, adapt = adapt)
+        if (adapt) {
+            Box(Modifier.fillMaxWidth().height(padT + 80.dp).background(Brush.verticalGradient(listOf(CarLook.Graphite, CarLook.Graphite.copy(alpha = 0f)))))
+            Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(padB + 34.dp).background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black))))
+        }
         Column(Modifier.fillMaxSize().padding(start = padL, top = padT, end = padR, bottom = padB), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             // the weather all the way to the right (Android Auto's buttons cover it only while they show)
-            BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp), plain = true, endPad = 22.dp)
+            if (adapt) CarTopLine(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp).padding(start = 16.dp), clock = true, endPad = 22.dp)
+            else BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp), plain = true, endPad = 22.dp)
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
                 val dial = minOf(maxHeight * 0.92f, maxWidth * 0.3f)
-                GaugeSpeed(wx, Modifier.size(dial).align(Alignment.CenterStart).padding(start = 6.dp))
-                Vinyl(now, Modifier.size(dial).align(Alignment.CenterEnd).padding(end = 6.dp))
+                GaugeSpeed(wx, Modifier.size(dial).align(Alignment.CenterStart).padding(start = 6.dp), adapt)
+                Vinyl(now, Modifier.size(dial).align(Alignment.CenterEnd).padding(end = 6.dp), adapt)
                 if (NavNotice.active(now)) TurnChip(Modifier.align(Alignment.TopCenter).padding(top = 2.dp).fillMaxWidth(0.36f))
                 // the song under the car, in a box of fixed width (between the two dials): a long name scrolls inside it
                 val cardW = minOf(maxWidth - dial * 2 - 32.dp, maxWidth * 0.34f)
-                Column(Modifier.align(Alignment.BottomCenter).width(cardW).clipToBounds().clip(RoundedCornerShape(16.dp)).background(P.card.last()).border(1.dp, Edge, RoundedCornerShape(16.dp))
+                Column(Modifier.align(Alignment.BottomCenter).width(cardW).clipToBounds()
+                    .then(if (adapt) Modifier else Modifier.clip(RoundedCornerShape(16.dp)).background(P.card.last()).border(1.dp, Edge, RoundedCornerShape(16.dp)))
                     .padding(horizontal = 14.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     androidx.compose.runtime.key(NowPlaying.title) {
                         Text(NowPlaying.title.ifBlank { if (NowPlaying.allowed) "Nada tocando" else "Permita o acesso às notificações no celular" }, color = Txt, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1,
@@ -625,9 +640,12 @@ private fun TurnChip(modifier: Modifier) {
 
 /** The speedometer of the Música mode: a numbered scale (0 to 180), the band lit up to the speed, the number in a glowing circle. */
 @Composable
-private fun GaugeSpeed(wx: Weather.Now?, modifier: Modifier) {
+private fun GaugeSpeed(wx: Weather.Now?, modifier: Modifier, adapt: Boolean = false) {
     val kmh = Math.round((Drive.speed * 3.6).coerceAtLeast(0.0)).toInt()
-    val bg = P.card.last(); val track = Track; val grad = Blue; val edge = Edge; val sub = Sub; val hi = Txt
+    // (adapted to the car: white on the graphite)
+    val bg = if (adapt) Color(0xD9141518) else P.card.last(); val track = if (adapt) Color(0xFF3A3B40) else Track
+    val grad = if (adapt) listOf(Color(0xFFBDBDC4), Color.White) else Blue; val edge = if (adapt) Color(0x33FFFFFF) else Edge
+    val sub = if (adapt) Color(0xFFC4C4CC) else Sub; val hi = Txt
     val m = androidx.compose.ui.text.rememberTextMeasurer()
     BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
         val d = minOf(maxWidth, maxHeight)
@@ -661,21 +679,21 @@ private fun GaugeSpeed(wx: Weather.Now?, modifier: Modifier) {
             // the glowing circle in the middle
             val ri = r * 0.42f
             drawCircle(grad.last().copy(alpha = 0.18f), ri + r * 0.06f, c)
-            drawCircle(Color(0xFF070D1A), ri, c)
+            drawCircle(if (adapt) Color(0xFF0E0F11) else Color(0xFF070D1A), ri, c)
             drawCircle(Brush.sweepGradient(listOf(grad.first(), grad.last(), grad.first()), c), ri, c, style = Stroke(r * 0.025f))
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("$kmh", color = Txt, fontSize = (d.value * 0.2f).sp, fontWeight = FontWeight.ExtraBold, lineHeight = (d.value * 0.22f).sp)
             Text("km/h", color = Sub, fontSize = (d.value * 0.05f).coerceIn(10f, 16f).sp)
         }
-        if (wx != null) Text("${Weather.emoji(wx.code)} ${Math.round(wx.tempC)}°", color = Txt, fontSize = (d.value * 0.06f).coerceIn(12f, 20f).sp,
+        if (wx != null && !adapt) Text("${Weather.emoji(wx.code)} ${Math.round(wx.tempC)}°", color = Txt, fontSize = (d.value * 0.06f).coerceIn(12f, 20f).sp,
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = (d.value * 0.08f).dp))
     }
 }
 
 /** The record: the album cover as a spinning disc with the back / play-pause / forward buttons; the ring fills as the song goes. */
 @Composable
-private fun Vinyl(now: Long, modifier: Modifier) {
+private fun Vinyl(now: Long, modifier: Modifier, adapt: Boolean = false) {
     val ctx = androidx.compose.ui.platform.LocalContext.current.applicationContext
     val d = NowPlaying.duration
     val pos = NowPlaying.position.coerceIn(0L, if (d > 0) d else Long.MAX_VALUE)
@@ -688,7 +706,8 @@ private fun Vinyl(now: Long, modifier: Modifier) {
             rot.snapTo(rot.value % 360f)
         }
     }
-    val bg = P.card.last(); val track = Track; val grad = Blue; val edge = Edge
+    val bg = if (adapt) Color(0xD9141518) else P.card.last(); val track = if (adapt) Color(0xFF3A3B40) else Track
+    val grad = if (adapt) listOf(Color(0xFFBDBDC4), Color.White) else Blue; val edge = if (adapt) Color(0x33FFFFFF) else Edge
     BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
         val size = minOf(maxWidth, maxHeight)
         Canvas(Modifier.size(size)) {
@@ -714,15 +733,15 @@ private fun Vinyl(now: Long, modifier: Modifier) {
         }
         // play / pause in the middle
         val bsz = disc * 0.42f
-        Box(Modifier.size(bsz).clip(androidx.compose.foundation.shape.CircleShape).background(Color(0xCC0B1222)).border(1.5.dp, Color(0x66FFFFFF), androidx.compose.foundation.shape.CircleShape)
+        Box(Modifier.size(bsz).clip(androidx.compose.foundation.shape.CircleShape).background(if (adapt) Color(0xCC141518) else Color(0xCC0B1222)).border(1.5.dp, Color(0x66FFFFFF), androidx.compose.foundation.shape.CircleShape)
             .carTap("mu-play") { NowPlaying.control(ctx, "play") }, contentAlignment = Alignment.Center) {
             Icon(if (NowPlaying.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(bsz * 0.62f))
         }
         // back and forward on the sides
         val ssz = size * 0.15f
         for ((what, al) in listOf("prev" to Alignment.CenterStart, "next" to Alignment.CenterEnd)) {
-            Box(Modifier.align(al).padding(horizontal = size * 0.06f).size(ssz).clip(androidx.compose.foundation.shape.CircleShape).background(Color(0xFF13203A))
-                .border(1.dp, Color(0xFF2C3E63), androidx.compose.foundation.shape.CircleShape).carTap("mu-$what") { NowPlaying.control(ctx, what) }, contentAlignment = Alignment.Center) {
+            Box(Modifier.align(al).padding(horizontal = size * 0.06f).size(ssz).clip(androidx.compose.foundation.shape.CircleShape).background(if (adapt) Color(0xFF1C1D20) else Color(0xFF13203A))
+                .border(1.dp, if (adapt) Color(0x33FFFFFF) else Color(0xFF2C3E63), androidx.compose.foundation.shape.CircleShape).carTap("mu-$what") { NowPlaying.control(ctx, what) }, contentAlignment = Alignment.Center) {
                 Icon(if (what == "prev") Icons.Rounded.SkipPrevious else Icons.Rounded.SkipNext, null, tint = Color.White, modifier = Modifier.size(ssz * 0.62f))
             }
         }
@@ -733,7 +752,7 @@ private fun Vinyl(now: Long, modifier: Modifier) {
 
 /** A Fórmula 1 car seen from behind, in the colour of the album cover, on a track with red and white kerbs. */
 @Composable
-private fun RoadAndCar(modifier: Modifier, top: Dp = 0.dp) {
+private fun RoadAndCar(modifier: Modifier, top: Dp = 0.dp, adapt: Boolean = false) {
     val accent = Blue.last()
     val carCol = Themes.coverAccent(NowPlaying.art)
     val blink = remember { androidx.compose.animation.core.Animatable(1f) }
@@ -749,7 +768,7 @@ private fun RoadAndCar(modifier: Modifier, top: Dp = 0.dp) {
         drawOval(Brush.radialGradient(listOf(carCol.copy(alpha = 0.35f), Color.Transparent), Offset(cx, horizon), w * 0.25f), Offset(cx - w * 0.25f, horizon - h * 0.2f), Size(w * 0.5f, h * 0.4f))
         // asphalt
         val road = Path().apply { moveTo(cx - half(horizon), horizon); lineTo(cx + half(horizon), horizon); lineTo(cx + half(h), h); lineTo(cx - half(h), h); close() }
-        drawPath(road, Brush.verticalGradient(listOf(Color(0xFF0E1424), Color(0xFF1A2236)), horizon, h))
+        drawPath(road, Brush.verticalGradient(if (adapt) listOf(Color(0xFF1E1F23), Color(0xFF2A2B30), Color(0xFF141518)) else listOf(Color(0xFF0E1424), Color(0xFF1A2236)), horizon, h))
         // kerbs: red and white blocks along both edges, shorter towards the horizon
         var y = h; var i = 0
         while (y > horizon + 2f) {
@@ -766,11 +785,11 @@ private fun RoadAndCar(modifier: Modifier, top: Dp = 0.dp) {
             y = y2; i++
         }
         // neon edges and the dashed middle line
-        for (sgn in listOf(-1f, 1f)) {
+        if (!adapt) for (sgn in listOf(-1f, 1f)) {
             drawLine(carCol.copy(alpha = 0.35f), Offset(cx + sgn * half(h) * 0.9f, h), Offset(cx + sgn * half(horizon) * 0.9f, horizon), strokeWidth = 9f)
             drawLine(carCol, Offset(cx + sgn * half(h) * 0.9f, h), Offset(cx + sgn * half(horizon) * 0.9f, horizon), strokeWidth = 3f)
         }
-        drawLine(accent.copy(alpha = 0.7f), Offset(cx, h), Offset(cx, horizon), strokeWidth = 3f, pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(22f, 18f)))
+        drawLine(if (adapt) Color.White.copy(alpha = 0.35f) else accent.copy(alpha = 0.7f), Offset(cx, h), Offset(cx, horizon), strokeWidth = 3f, pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(22f, 18f)))
 
         // the car (drawn on a 300 × 190 grid, centred)
         val s = minOf(w / 520f, (h - topPx) / 300f)
@@ -784,7 +803,9 @@ private fun RoadAndCar(modifier: Modifier, top: Dp = 0.dp) {
         for (x in listOf(-138f, 86f)) {
             rect(x, -6f, 52f, 80f, Color(0xFF111111), 14f)
             rect(x + 4f, 4f, 44f, 6f, Color(0xFF2A2A2A), 3f)
-            rect(x + 8f, 30f, 36f, 3f, Color(0xFFFFD400))
+            rect(x + 8f, 30f, 36f, 3f, if (adapt) Color(0xFF3A3A3A) else Color(0xFFFFD400))
+            // (more real: the sidewalls)
+            if (adapt) { rect(x + 2f, 56f, 48f, 3f, Color(0xFF2A2A2A)); rect(x, -6f, 6f, 80f, Color(0xFF1C1C1C), 3f) }
         }
         // suspension
         for (sg in listOf(-1f, 1f)) {
@@ -797,7 +818,11 @@ private fun RoadAndCar(modifier: Modifier, top: Dp = 0.dp) {
             quadraticBezierTo(X(-16f), Y(-42f), X(0f), Y(-44f)); quadraticBezierTo(X(16f), Y(-42f), X(30f), Y(-22f)); lineTo(X(52f), Y(4f))
             quadraticBezierTo(X(78f), Y(12f), X(80f), Y(46f)); close()
         }
-        drawPath(body, Brush.verticalGradient(listOf(carCol, carCol.copy(red = carCol.red * 0.6f, green = carCol.green * 0.6f, blue = carCol.blue * 0.6f)), Y(-44f), Y(46f)))
+        val darkCol = carCol.copy(red = carCol.red * 0.55f, green = carCol.green * 0.55f, blue = carCol.blue * 0.55f)
+        drawPath(body, if (adapt) Brush.horizontalGradient(listOf(darkCol, carCol, carCol, darkCol), X(-80f), X(80f))
+            else Brush.verticalGradient(listOf(carCol, carCol.copy(red = carCol.red * 0.6f, green = carCol.green * 0.6f, blue = carCol.blue * 0.6f)), Y(-44f), Y(46f)))
+        // (more real: the halo over the cockpit, seen from behind)
+        if (adapt) drawArc(Color(0xFF1B1B1B), 200f, 140f, false, Offset(X(-46f), Y(-60f)), Size(92f * s, 70f * s), style = Stroke(6f * s, cap = StrokeCap.Round))
         val cover = Path().apply {
             moveTo(X(-30f), Y(-22f)); quadraticBezierTo(X(-16f), Y(-42f), X(0f), Y(-44f)); quadraticBezierTo(X(16f), Y(-42f), X(30f), Y(-22f))
             lineTo(X(18f), Y(-6f)); lineTo(X(-18f), Y(-6f)); close()

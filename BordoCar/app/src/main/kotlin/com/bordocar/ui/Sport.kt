@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -150,13 +151,24 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
     val jKind = if (jinfo != null && (jinfo.held || jKind0 == null)) jinfo.kind ?: jKind0 else jKind0
     val jDist = jinfo?.takeIf { it.held }?.let { "${Math.round(it.aheadM / 10.0) * 10} m" } ?: tDist
 
-    Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color(0xFF2A1012), Color(0xFF0E0808), Color(0xFF060404)), center = Offset(750f, 0f), radius = 1900f))
+    val adapt = CarLook.on
+    Box((if (adapt) Modifier.fillMaxSize().background(Color(0xFF1D1415)).drawBehind {
+            // (adapted to the car) the fine diagonal lines of the car's graphite, tinted red, a red glow in the middle, and the bottom
+            // melting into Android Auto's black strip
+            val step = 4.6.dp.toPx(); val lw = 1.6.dp.toPx()
+            var x = -size.height
+            while (x < size.width) { drawLine(Color(0xFF2C1C1D), Offset(x, size.height), Offset(x + size.height, 0f), strokeWidth = lw); x += step }
+            drawRect(Brush.radialGradient(listOf(Color(0x40FF3B30), Color.Transparent), center = Offset(size.width / 2f, size.height * 0.52f), radius = size.width * 0.42f))
+            val f = padB.toPx() + 34.dp.toPx()
+            drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black), startY = size.height - f, endY = size.height), Offset(0f, size.height - f), Size(size.width, f))
+        }
+        else Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color(0xFF2A1012), Color(0xFF0E0808), Color(0xFF060404)), center = Offset(750f, 0f), radius = 1900f))
         .drawBehind {
             // faint carbon stripes
             val step = 14f
             var x = -size.height
             while (x < size.width) { drawLine(Color(0x0DFFFFFF), Offset(x, size.height), Offset(x + size.height, 0f), strokeWidth = 5f); x += step }
-        }) {
+        })) {
         Column(Modifier.fillMaxSize().padding(start = padL, top = padT, end = padR, bottom = padB)) {
             // the time, battery and weather (Android Auto's buttons sit at the right end)
             Row(Modifier.fillMaxWidth().height(52.dp).padding(start = 12.dp, end = 170.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -168,7 +180,9 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
                 if (preview) Text("PRÉVIA", color = Color(0xFF1A0A0A), fontSize = 13.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(start = 20.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFFFFC24E)).padding(horizontal = 8.dp, vertical = 2.dp))
                 Spacer(Modifier.weight(1f))
-                if (wx != null) Text("${Weather.emoji(wx.code)} ${Math.round(wx.tempC)}°" + (if (city.isNotBlank()) " $city" else ""), color = Soft, fontSize = 20.sp, maxLines = 1)
+                // (adapted to the car: no temperature, the car shows it)
+                if (wx != null) Text(if (adapt) Weather.emoji(wx.code) + "  " + listOf(city, Weather.text(wx.code)).filter { it.isNotBlank() }.joinToString(" · ")
+                    else "${Weather.emoji(wx.code)} ${Math.round(wx.tempC)}°" + (if (city.isNotBlank()) " $city" else ""), color = Soft, fontSize = if (adapt) 18.sp else 20.sp, maxLines = 1)
             }
             // the lights stay as they are above the limit: it's the limit's circle that blinks
             Leds(kmh, false, true, Modifier.fillMaxWidth().height(20.dp).padding(horizontal = 12.dp))

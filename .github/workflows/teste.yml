@@ -84,6 +84,8 @@ jobs:
           # "Adaptar ao carro" (the row scrolls back up to the dashboard)
           tapS "Adaptar ao carro"; sleep 4; adb exec-out screencap -p > out/9-normal-adaptado.png
           tapS "Estrada"; sleep 4; adb exec-out screencap -p > out/10-estrada-adaptado.png
+          tapS "Música"; sleep 4; adb exec-out screencap -p > out/11-musica-adaptado.png
+          tapS "Esportivo"; sleep 4; adb exec-out screencap -p > out/12-esportivo-adaptado.png
           tapS "Normal"; sleep 2; tapS "Adaptar ao carro"; sleep 2
           adb logcat -d > out/logcat.txt
           grep -E "FATAL EXCEPTION|AndroidRuntime" -A8 out/logcat.txt | head -60 > out/erros.txt || true
