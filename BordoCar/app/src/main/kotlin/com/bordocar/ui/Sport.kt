@@ -167,7 +167,7 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
         })) {
         Column(Modifier.fillMaxSize().padding(start = padL, top = padT, end = padR, bottom = padB)) {
             // the time, battery and weather (Android Auto's buttons sit at the right end)
-            Row(Modifier.fillMaxWidth().height(52.dp).padding(start = 12.dp, end = 170.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().height(52.dp).padding(start = 12.dp, end = if (adapt) 8.dp else 170.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(java.text.SimpleDateFormat("HH:mm", BRL).format(java.util.Date(now)), color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
                 // the day and month next to the time: "ter, 3 de novembro"
                 Text(java.text.SimpleDateFormat("EEE, d 'de' MMMM", BRL).format(java.util.Date(now)).replace(".", ""), color = Soft, fontSize = 18.sp,
@@ -246,7 +246,9 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
                     val gsz = (maxHeight.value * 0.48f).coerceAtMost(maxWidth.value * 0.7f)
                     val g2 = minOf(maxHeight.value * 0.4f, maxWidth.value * 0.36f)
                     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.End) {
-                        if (route && turnSub.isNotBlank()) Stat("ROTA", turnSub, null, small = true)
+                        // (adapted to the car: the arrival goes over the g-force, see below; on top only while the map of the turn is on)
+                        val eta = if (adapt && route) (if (sample) Arrival("18:05", "21 km · 23 min", 0f) else arrivalNow(now)) else null
+                        if (route && turnSub.isNotBlank() && (eta == null || jinfo != null)) Stat("ROTA", turnSub, null, small = true)
                         val cur = Drive.current()
                         val tripKm = if (preview && cur == null) 48.3 else (cur?.first ?: 0.0) / 1000.0
                         val tripMin = if (preview && cur == null) 38 else ((cur?.second ?: 0L) / 60L).toInt()
@@ -278,7 +280,15 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
                             }
                         } else {
                             Spacer(Modifier.weight(1f))
-                            GMeter(gx, gy, Modifier.size(gsz.dp))
+                            if (eta != null) {
+                                // the arrival and what's left, right over the g-force (a little smaller then)
+                                Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(bottom = 10.dp)) {
+                                    Text("CHEGADA", color = Color(0xFF8E8E96), fontSize = 11.sp, letterSpacing = 3.sp)
+                                    if (eta.eta != null) Text(eta.eta, color = Color.White, fontSize = 38.sp, lineHeight = 40.sp, fontWeight = FontWeight.Light, maxLines = 1)
+                                    if (eta.left.isNotBlank()) Text("faltam " + eta.left, color = Color(0xFFFF6B5A), fontSize = 15.sp, maxLines = 1)
+                                }
+                                GMeter(gx, gy, Modifier.size((gsz * 0.72f).dp))
+                            } else GMeter(gx, gy, Modifier.size(gsz.dp))
                         }
                     }
                 }

@@ -85,6 +85,11 @@ object CarLook {
     val Txt = Color(0xFFF4F4F6)
     val Sub = Color(0xFFA8A8B0)
     val Cap = Color(0xFF8E8E96)
+    /** The blue of the 208's 3D cluster (its needle and "ALCANCE"): the dials, the titles, today's bar. */
+    val Blue1 = Color(0xFF1E8FD0)
+    val Blue2 = Color(0xFF5FD8FF)
+    /** Estrada keeps its own look even when adapted. */
+    const val road = false
 }
 
 private val BR = Locale("pt", "BR")
@@ -102,7 +107,7 @@ fun CarType(content: @Composable () -> Unit) =
 
 @Composable
 private fun Cap(text: String, modifier: Modifier = Modifier) =
-    Text(text, color = CarLook.Cap, fontSize = 11.sp, letterSpacing = 3.sp, maxLines = 1, modifier = modifier)
+    Text(text, color = CarLook.Blue2, fontSize = 11.sp, letterSpacing = 3.sp, maxLines = 1, modifier = modifier)
 
 @Composable
 private fun VLine(modifier: Modifier = Modifier) = Box(modifier.width(1.dp).fillMaxHeight(0.86f).background(CarLook.Hair))
@@ -147,7 +152,8 @@ fun NormalAdapted(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city
         // into the black strip of Android Auto
         Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(padB + 30.dp).background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black))))
         Column(Modifier.fillMaxSize().padding(start = padL + 12.dp, top = padT, end = padR + 12.dp, bottom = padB + 6.dp)) {
-            CarTopLine(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(52.dp), clock = true)
+            // (the weather all the way to the right: Android Auto's buttons cover it only while they show)
+            CarTopLine(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(52.dp), clock = true, endPad = 6.dp)
             Row(Modifier.fillMaxWidth().weight(1.15f), verticalAlignment = Alignment.CenterVertically) {
                 MusicFlat(Modifier.weight(0.48f).fillMaxHeight())
                 VLine(Modifier.padding(horizontal = 14.dp))
@@ -198,7 +204,7 @@ private fun MusicFlat(modifier: Modifier) {
                 if (d > 0) {
                     val pos = NowPlaying.position.coerceIn(0L, d)
                     Box(Modifier.padding(top = (h * 0.09f).coerceIn(8f, 18f).dp).fillMaxWidth().height(3.dp).background(Color(0x1FFFFFFF))) {
-                        Box(Modifier.fillMaxHeight().fillMaxWidth((pos.toFloat() / d).coerceIn(0f, 1f)).background(Color.White))
+                        Box(Modifier.fillMaxHeight().fillMaxWidth((pos.toFloat() / d).coerceIn(0f, 1f)).background(Brush.horizontalGradient(listOf(CarLook.Blue1, CarLook.Blue2))))
                     }
                     Row(Modifier.fillMaxWidth().padding(top = 5.dp)) {
                         Text(mmss(pos), color = CarLook.Cap, fontSize = 12.sp)
@@ -223,7 +229,14 @@ private fun SpeedFlat(modifier: Modifier) {
             val tl = Offset(sw / 2, sw / 2); val sz = Size(size.width - sw, size.height - sw)
             drawArc(Color(0xFF3A3B40), 135f, 270f, false, tl, sz, style = Stroke(sw, cap = StrokeCap.Round))
             val f = (kmh / 160f).coerceIn(0f, 1f)
-            if (f > 0.003f) drawArc(if (over) Color(0xFFFF4D3D) else Color.White, 135f, 270f * f, false, tl, sz, style = Stroke(sw, cap = StrokeCap.Round))
+            if (f > 0.003f) {
+                if (over) drawArc(Color(0xFFFF4D3D), 135f, 270f * f, false, tl, sz, style = Stroke(sw, cap = StrokeCap.Round))
+                else {
+                    // the blue needle of the cluster, with its glow
+                    drawArc(CarLook.Blue2.copy(alpha = 0.3f), 135f, 270f * f, false, tl, sz, style = Stroke(sw * 3f, cap = StrokeCap.Round))
+                    drawArc(Brush.sweepGradient(listOf(CarLook.Blue1, CarLook.Blue2, CarLook.Blue1)), 135f, 270f * f, false, tl, sz, style = Stroke(sw, cap = StrokeCap.Round))
+                }
+            }
         }
         val big = (d.value * 0.32f).coerceIn(18f, 60f)
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -284,8 +297,8 @@ private fun TurnFlat(modifier: Modifier) {
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
             val ic = NavNotice.icon
             val isz = (h * 0.62f).coerceIn(34f, 80f)
-            if (ic != null) Image(ic.asImageBitmap(), null, colorFilter = ColorFilter.tint(Color.White), modifier = Modifier.size(isz.dp))
-            else Icon(Icons.Rounded.Navigation, null, tint = Color.White, modifier = Modifier.size(isz.dp))
+            if (ic != null) Image(ic.asImageBitmap(), null, colorFilter = ColorFilter.tint(CarLook.Blue2), modifier = Modifier.size(isz.dp))
+            else Icon(Icons.Rounded.Navigation, null, tint = CarLook.Blue2, modifier = Modifier.size(isz.dp))
             Column(Modifier.padding(start = 18.dp)) {
                 Cap("PRÓXIMA CURVA · " + NavNotice.app.uppercase(BR))
                 val (dist, rest) = NavNotice.split(NavNotice.title, NavNotice.text)
@@ -347,13 +360,13 @@ private fun WeekFlat(modifier: Modifier) {
                     val x = i * (bw + gap)
                     val f = (days[i] / max).toFloat().coerceIn(0f, 1f)
                     val bh = if (f > 0f) (size.height * f).coerceAtLeast(base * 2) else base
-                    val col = if (f <= 0f) Color(0xFF3A3B40) else if (i == today) Color.White else Color.White.copy(alpha = 0.55f)
+                    val col = if (f <= 0f) Color(0xFF3A3B40) else if (i == today) CarLook.Blue2 else Color.White.copy(alpha = 0.55f)
                     drawRoundRect(col, Offset(x, size.height - bh), Size(bw, bh), CornerRadius(2.dp.toPx()))
                 }
             }
             Row(Modifier.fillMaxWidth().padding(top = 3.dp)) {
                 for ((i, l) in listOf("S", "T", "Q", "Q", "S", "S", "D").withIndex())
-                    Text(l, color = if (i == today) Color.White else CarLook.Cap, fontSize = 10.sp, fontWeight = if (i == today) FontWeight.Bold else FontWeight.Normal,
+                    Text(l, color = if (i == today) CarLook.Blue2 else CarLook.Cap, fontSize = 10.sp, fontWeight = if (i == today) FontWeight.Bold else FontWeight.Normal,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.weight(1f))
             }
         }

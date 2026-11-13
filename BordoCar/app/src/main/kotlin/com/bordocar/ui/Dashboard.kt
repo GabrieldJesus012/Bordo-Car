@@ -245,11 +245,17 @@ fun Dashboard(ctx: Context, actions: DashActions, padL: Dp, padT: Dp, padR: Dp, 
     }
 }
 
-/** Estrada, in the plain type of the car's screen when it's adapted to the car. */
+/** Estrada stays as it is even when adapted to the car (thin text over the bright sky didn't read, the black edges looked odd). */
 @Composable
-private fun RoadDashLook(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: String, padL: Dp, padT: Dp, padR: Dp, padB: Dp) {
-    if (CarLook.on) CarType { RoadDash(now, bat, charging, wx, city, padL, padT, padR, padB) }
-    else RoadDash(now, bat, charging, wx, city, padL, padT, padR, padB)
+private fun RoadDashLook(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: String, padL: Dp, padT: Dp, padR: Dp, padB: Dp) =
+    RoadDash(now, bat, charging, wx, city, padL, padT, padR, padB)
+
+/** The arrival of the route on now (for the sporty dashboard): the time, and what's left. */
+internal fun arrivalNow(now: Long): Arrival? {
+    if (!NavNotice.active(now)) return null
+    val left = Remaining.parse(NavNotice.sub, NavNotice.text, NavNotice.title)
+    val cur = Drive.current(); val (tm, ts) = Drive.today()
+    return arrival(now, true, left, cur?.first ?: tm, cur?.second ?: ts)
 }
 
 @android.annotation.SuppressLint("MissingPermission")
@@ -892,10 +898,10 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
             // on the left (the driver's side) a column with the sign, the speed and the arrival
             JunctionMap(now, jinfo, sky.preset, here, hd, Modifier.fillMaxSize(), textureView = !onCar, carAt = 0.80, turnAt = 0.26, carX = 0.67)
             Box(Modifier.fillMaxWidth().height(padT + 90.dp).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.55f), Color.Transparent))))
-            val col = if (CarLook.on) CarLook.Graphite else Color(0xFF0B1222)
+            val col = if (CarLook.road) CarLook.Graphite else Color(0xFF0B1222)
             Box(Modifier.fillMaxHeight().fillMaxWidth(0.44f).background(Brush.horizontalGradient(0f to col, 0.72f to col.copy(alpha = 0.95f), 1f to col.copy(alpha = 0f))))
             Box(Modifier.fillMaxWidth().padding(start = padL, top = padT, end = padR)) {
-                if (CarLook.on) CarTopLine(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp).padding(start = 16.dp), clock = true)
+                if (CarLook.road) CarTopLine(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp).padding(start = 16.dp), clock = true)
                 else BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp), plain = true)
             }
             val kmh = Math.round((Drive.speed * 3.6).coerceAtLeast(0.0)).toInt()
@@ -927,17 +933,17 @@ private fun RoadDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, c
                 modifier = Modifier.align(Alignment.BottomEnd).padding(end = padR + 12.dp, bottom = padB + 10.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFFFFC24E)).padding(horizontal = 8.dp, vertical = 2.dp))
             return@Box
         } else Highway(navigating && !pv, now, Modifier.fillMaxSize())
-        if (CarLook.on) RoadEdges(padB)
+        if (CarLook.road) RoadEdges(padB)
         if (pv) Text("PRÉVIA", color = Color(0xFF1A0A0A), fontSize = 13.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = padB + 10.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFFFFC24E)).padding(horizontal = 8.dp, vertical = 2.dp))
         Box(Modifier.fillMaxWidth().height(padT + 90.dp).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.35f), Color.Transparent))))
         Column(Modifier.fillMaxSize().padding(start = padL, top = padT, end = padR, bottom = padB), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (CarLook.on) CarTopLine(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp).padding(start = 16.dp), clock = true)
+            if (CarLook.road) CarTopLine(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp).padding(start = 16.dp), clock = true)
             else BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp), plain = true)
           Box(Modifier.fillMaxWidth().weight(1f)) {
           Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             // (the trip's line steps aside while the map of the turn is up)
-            if (jinfo == null) Timeline(now, navigating, a, doneM, dist, Modifier.fillMaxWidth().height(82.dp), flat = CarLook.on)
+            if (jinfo == null) Timeline(now, navigating, a, doneM, dist, Modifier.fillMaxWidth().height(82.dp), flat = CarLook.road)
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 14.dp)) {
                 val h = maxHeight.value
                 val big = (h * 0.3f).coerceIn(36f, 110f)
@@ -1204,14 +1210,14 @@ private fun Highway(navigating: Boolean, now: Long, modifier: Modifier) {
     }
 }
 
-private class Arrival(val eta: String?, val left: String, val progress: Float, val km: Double? = null)
+internal class Arrival(val eta: String?, val left: String, val progress: Float, val km: Double? = null)
 
 /**
  * The arrival bar of Estrada. What's left comes from Waze / Google Maps when they say it ("Chegada: 16:26", "12 km", "21 min"); the
  * minutes left are worked out from the arrival time when only that comes (Google Maps); and when the route was started from Bordo
  * Car (Casa, Trabalho, a favourite), the distance to the destination as the crow flies fills in what's missing (Waze), marked "≈".
  */
-private fun arrival(now: Long, navigating: Boolean, left: Remaining.Left?, doneM: Double, doneS: Long): Arrival? {
+internal fun arrival(now: Long, navigating: Boolean, left: Remaining.Left?, doneM: Double, doneS: Long): Arrival? {
     if (!navigating) return null
     val fmt = java.text.SimpleDateFormat("HH:mm", BR)
     var eta = left?.eta
@@ -1247,8 +1253,8 @@ private fun arrival(now: Long, navigating: Boolean, left: Remaining.Left?, doneM
     return Arrival(eta, parts.joinToString(" · "), progress, km)
 }
 
-private fun fmtKm(v: Double) = (if (v < 100) String.format(BR, "%.1f", v).removeSuffix(",0") else "${Math.round(v)}") + " km"
-private fun fmtMin(m: Int) = if (m < 60) "$m min" else "${m / 60}h ${"%02d".format(m % 60)}"
+internal fun fmtKm(v: Double) = (if (v < 100) String.format(BR, "%.1f", v).removeSuffix(",0") else "${Math.round(v)}") + " km"
+internal fun fmtMin(m: Int) = if (m < 60) "$m min" else "${m / 60}h ${"%02d".format(m % 60)}"
 
 @Composable
 private fun Stat(label: String, value: String, unit: String, note: String?, modifier: Modifier) {
