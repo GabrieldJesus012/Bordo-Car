@@ -147,7 +147,7 @@ fun NormalAdapted(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city
         // into the black strip of Android Auto
         Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(padB + 30.dp).background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black))))
         Column(Modifier.fillMaxSize().padding(start = padL + 12.dp, top = padT, end = padR + 12.dp, bottom = padB + 6.dp)) {
-            CarTopLine(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(48.dp))
+            CarTopLine(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(52.dp), clock = true)
             Row(Modifier.fillMaxWidth().weight(1.15f), verticalAlignment = Alignment.CenterVertically) {
                 MusicFlat(Modifier.weight(0.48f).fillMaxHeight())
                 VLine(Modifier.padding(horizontal = 14.dp))
