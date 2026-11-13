@@ -299,21 +299,6 @@ class MainActivity : ComponentActivity() {
                 Button("+ Adicionar favorito") { picking = Pick(null, "Favorito") }
             }
 
-            Section("Próxima curva do Waze / Maps") {
-                val raw = NavNotice.lastRaw
-                val tap = com.bordocar.car.DashSurface.lastTap
-                if (tap.isNotBlank()) Text("Último toque na tela do carro: $tap", color = Sub, fontSize = 12.sp)
-                val hist = com.bordocar.car.navHistory.toList()
-                if (hist.isNotEmpty()) Text("Destinos enviados pelo carro (o mais novo em cima):\n" + hist.take(8).joinToString("\n"), color = Sub, fontSize = 12.sp)
-                if (Weather.lastNote.isNotBlank()) Text("Clima: ${Weather.lastNote}", color = Sub, fontSize = 12.sp)
-                if (DriveService.running || Drive.lastFixAt > 0L) {
-                    val ago = if (Drive.lastFixAt > 0L) "${(System.currentTimeMillis() - Drive.lastFixAt) / 1000} s" else "nenhum ainda"
-                    Text("GPS do carro: último sinal há $ago" + (if (DriveService.gpsNote.isNotBlank()) " (${DriveService.gpsNote})" else ""), color = Sub, fontSize = 12.sp)
-                }
-                Text(if (raw.isBlank()) "Ainda nada lido. Comece uma rota no Waze ou no Google Maps e volte aqui para ver o que eles mostram." else "Última lida: $raw",
-                    color = Sub, fontSize = 13.sp)
-            }
-
             Section("Android Auto") {
                 Text("Para o Bordo Car aparecer no carro: no Android Auto, ative as configurações de desenvolvedor (toque 10× em \"Versão\") e ligue \"Fontes desconhecidas\".",
                     color = Sub, fontSize = 13.sp)
@@ -321,6 +306,28 @@ class MainActivity : ComponentActivity() {
                     try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/${BuildConfig.UPDATE_REPO}/releases/download/app/BordoCar.apk"))) } catch (e: Exception) { }
                 }
             }
+            // what the app reads and does, to find a problem when something fails: closed until it's tapped
+            Section("Diagnóstico") {
+                var open by remember { mutableStateOf(false) }
+                Text(if (open) "Esconder ▴" else "Mostrar o que o app está lendo (se algo falhar, mande um print disto) ▾", color = Accent, fontSize = 13.sp,
+                    modifier = Modifier.fillMaxWidth().clickable { open = !open }.padding(vertical = 4.dp))
+                if (open) {
+                    val raw = NavNotice.lastRaw
+                    val tap = com.bordocar.car.DashSurface.lastTap
+                    if (tap.isNotBlank()) Text("Último toque na tela do carro: $tap", color = Sub, fontSize = 12.sp)
+                    val hist = com.bordocar.car.navHistory.toList()
+                    if (hist.isNotEmpty()) Text("Destinos enviados pelo carro (o mais novo em cima):\n" + hist.take(8).joinToString("\n"), color = Sub, fontSize = 12.sp)
+                    if (Weather.lastNote.isNotBlank()) Text("Clima: ${Weather.lastNote}", color = Sub, fontSize = 12.sp)
+                    if (DriveService.running || Drive.lastFixAt > 0L) {
+                        val ago = if (Drive.lastFixAt > 0L) "${(System.currentTimeMillis() - Drive.lastFixAt) / 1000} s" else "nenhum ainda"
+                        Text("GPS do carro: último sinal há $ago" + (if (DriveService.gpsNote.isNotBlank()) " (${DriveService.gpsNote})" else ""), color = Sub, fontSize = 12.sp)
+                    }
+                    Text(if (raw.isBlank()) "Ainda nada lido. Comece uma rota no Waze ou no Google Maps e volte aqui para ver o que eles mostram." else "Última lida: $raw",
+                        color = Sub, fontSize = 13.sp)
+
+                }
+            }
+
             @Suppress("UNUSED_VARIABLE") val t = tick
             Spacer(Modifier.size(20.dp))
         }
