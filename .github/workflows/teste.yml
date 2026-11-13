@@ -80,6 +80,7 @@ jobs:
           }
           tapS "Música"; sleep 4; adb exec-out screencap -p > out/7-modo-musica.png
           # (Estrada only shows with a route: its preview, with a made-up one)
+          adb shell settings put system user_rotation 0; sleep 2
           tapS "Ver prévia (16 s)"; sleep 6; adb exec-out screencap -p > out/8-modo-estrada.png; sleep 12
           tapS "Normal"; sleep 2
           adb logcat -d > out/logcat.txt
