@@ -1274,7 +1274,7 @@ private fun Stat(label: String, value: String, unit: String, note: String?, modi
 }
 
 /** What Waze / Google Maps say is left of the route ("18:05", "21 km", "35 min"), read from their navigation notice. */
-private object Remaining {
+internal object Remaining {
     class Left(val eta: String?, val km: Double?, val min: Int?)
     fun parse(sub: String, text: String, title: String): Left? {
         // the turn's own distance is in the title / text; what's left of the route is usually in the small line
