@@ -165,7 +165,7 @@ fun Dashboard(ctx: Context, actions: DashActions, padL: Dp, padT: Dp, padR: Dp, 
             now = System.currentTimeMillis()
             try { NowPlaying.refresh(ctx) } catch (e: Exception) { }
             Sport.update(Math.round((Drive.speed * 3.6).coerceAtLeast(0.0)).toInt())
-            delay(if (Sport.previewing(now)) 250L else if (Modes.cur == "esportivo" || Sport.showing(now) || JunctionPreview.active(now)) 500L else 1000L)
+            delay(if (Sport.previewing(now)) 250L else if (Modes.shown(now) == "esportivo" || Sport.showing(now) || JunctionPreview.active(now)) 500L else 1000L)
         }
     }
     // the weather and the town where you are (every 20 minutes)
@@ -206,16 +206,16 @@ fun Dashboard(ctx: Context, actions: DashActions, padL: Dp, padT: Dp, padR: Dp, 
     val navigating = NavNotice.active(now)
     // the preview of the map of the turn shows Estrada, whatever the mode
     if (JunctionPreview.active(now)) { RoadDashLook(now, bat, charging, wx, city, padL, padT, padR, padB); return }
-    if (RouteView.show != null && Modes.cur == "normal" && !Sport.showing(now)) { RouteMapScreen(now, padL, padT, padR, padB); return }
-    if (Modes.cur == "esportivo" || Sport.showing(now)) {
+    if (RouteView.show != null && Modes.shown(now) == "normal" && !Sport.showing(now)) { RouteMapScreen(now, padL, padT, padR, padB); return }
+    if (Modes.shown(now) == "esportivo" || Sport.showing(now)) {
         if (CarLook.on) CarType { SportDash(now, bat, charging, wx, city, padL, padT, padR, padB) } else SportDash(now, bat, charging, wx, city, padL, padT, padR, padB)
         return
     }
-    if (Modes.cur == "musica") {
+    if (Modes.shown(now) == "musica") {
         if (CarLook.on) CarType { MusicDash(now, bat, charging, wx, city, padL, padT, padR, padB) } else MusicDash(now, bat, charging, wx, city, padL, padT, padR, padB)
         return
     }
-    if (Modes.cur == "estrada" || JunctionPreview.active(now)) { RoadDashLook(now, bat, charging, wx, city, padL, padT, padR, padB); return }
+    if (Modes.shown(now) == "estrada" || JunctionPreview.active(now)) { RoadDashLook(now, bat, charging, wx, city, padL, padT, padR, padB); return }
     // "Adaptar ao carro": the Normal dashboard flat on the graphite of the car's screen
     if (CarLook.on) { NormalAdapted(now, bat, charging, wx, city, actions, navigating, padL, padT, padR, padB); return }
 

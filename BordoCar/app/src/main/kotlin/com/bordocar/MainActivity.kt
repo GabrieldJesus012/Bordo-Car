@@ -200,8 +200,9 @@ class MainActivity : ComponentActivity() {
             Section("Modo do painel") {
                 com.bordocar.ui.Modes.load(this@MainActivity)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    for ((k, label) in com.bordocar.ui.Modes.all) {
-                        val on = com.bordocar.ui.Modes.cur == k
+                    // (Estrada only while there's a route on)
+                    for ((k, label) in com.bordocar.ui.Modes.available()) {
+                        val on = com.bordocar.ui.Modes.shown() == k
                         Box(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(if (on) Accent else Color(0xFF0F1830)).clickable {
                                 com.bordocar.ui.Modes.set(this@MainActivity, k); scope.launch { scroll.animateScrollTo(0) } }
                             .padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
@@ -209,12 +210,12 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
-                Text(when (com.bordocar.ui.Modes.cur) {
+                Text(when (com.bordocar.ui.Modes.shown()) {
                     "esportivo" -> "Esportivo: luzes, velocidade grande e a próxima curva dentro da bússola."
                     "musica" -> "Música: o carro na estrada no meio, a velocidade e o disco da música com o tempo."
-                    "estrada" -> "Estrada: chegada e quanto falta, a próxima curva grande, média e há quanto tempo está dirigindo."
+                    "estrada" -> "Estrada: a estrada com a velocidade, e o painel da viagem (curva, chegada, média, máxima, tempo dirigindo)."
                     else -> "Normal: música, próxima curva ou atalhos, velocidade, bússola e os km."
-                } + " A prévia lá em cima já mostra.", color = Sub, fontSize = 12.sp)
+                } + " A prévia lá em cima já mostra." + (if (!com.bordocar.ui.Modes.routeOn()) " O Estrada aparece quando houver uma rota no Waze ou no Google Maps." else ""), color = Sub, fontSize = 12.sp)
             }
 
             Section("Mapa da curva (modo Estrada)") {

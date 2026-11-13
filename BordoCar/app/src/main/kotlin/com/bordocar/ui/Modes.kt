@@ -14,6 +14,14 @@ object Modes {
     private var loaded = false
     fun load(ctx: Context) { if (loaded) return; loaded = true; cur = Prefs(ctx).s("mode", "normal").takeIf { k -> all.any { it.first == k } } ?: "normal" }
     fun set(ctx: Context, key: String) { cur = key; Prefs(ctx).put("mode", key) }
-    fun next(ctx: Context) = set(ctx, all[(all.indexOfFirst { it.first == cur } + 1) % all.size].first)
-    fun name(key: String = cur) = all.firstOrNull { it.first == key }?.second ?: "Normal"
+    /** Estrada is offered only while there's a route (Waze / Google Maps navigating). */
+    fun routeOn(now: Long = System.currentTimeMillis()) = com.bordocar.NavNotice.active(now)
+    fun available(now: Long = System.currentTimeMillis()) = if (routeOn(now)) all else all.filter { it.first != "estrada" }
+    /** The mode on the screen: Estrada shows as Normal while there's no route, and comes back by itself with the next route. */
+    fun shown(now: Long = System.currentTimeMillis()) = if (cur == "estrada" && !routeOn(now)) "normal" else cur
+    fun next(ctx: Context, now: Long = System.currentTimeMillis()) {
+        val av = available(now)
+        set(ctx, av[(av.indexOfFirst { it.first == shown(now) } + 1) % av.size].first)
+    }
+    fun name(key: String = shown()) = all.firstOrNull { it.first == key }?.second ?: "Normal"
 }
