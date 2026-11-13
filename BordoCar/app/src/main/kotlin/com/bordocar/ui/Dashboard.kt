@@ -207,45 +207,14 @@ fun Dashboard(ctx: Context, actions: DashActions, padL: Dp, padT: Dp, padR: Dp, 
     // the preview of the map of the turn shows Estrada, whatever the mode
     if (JunctionPreview.active(now)) { RoadDashLook(now, bat, charging, wx, city, padL, padT, padR, padB); return }
     if (RouteView.show != null && Modes.shown(now) == "normal" && !Sport.showing(now)) { RouteMapScreen(now, padL, padT, padR, padB); return }
-    if (Modes.shown(now) == "esportivo" || Sport.showing(now)) {
-        if (CarLook.on) CarType { SportDash(now, bat, charging, wx, city, padL, padT, padR, padB) } else SportDash(now, bat, charging, wx, city, padL, padT, padR, padB)
-        return
-    }
-    if (Modes.shown(now) == "musica") {
-        if (CarLook.on) CarType { MusicDash(now, bat, charging, wx, city, padL, padT, padR, padB) } else MusicDash(now, bat, charging, wx, city, padL, padT, padR, padB)
-        return
-    }
+    if (Modes.shown(now) == "esportivo" || Sport.showing(now)) { CarType { SportDash(now, bat, charging, wx, city, padL, padT, padR, padB) }; return }
+    if (Modes.shown(now) == "musica") { CarType { MusicDash(now, bat, charging, wx, city, padL, padT, padR, padB) }; return }
     if (Modes.shown(now) == "estrada" || JunctionPreview.active(now)) { RoadDashLook(now, bat, charging, wx, city, padL, padT, padR, padB); return }
-    // "Adaptar ao carro": the Normal dashboard flat on the graphite of the car's screen
-    if (CarLook.on) { NormalAdapted(now, bat, charging, wx, city, actions, navigating, padL, padT, padR, padB); return }
-
-    Box(Modifier.fillMaxSize().background(Bg)) {
-        Column(Modifier.fillMaxSize().padding(start = padL, top = padT, end = padR, bottom = padB), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            // the time, battery and weather along the top: Android Auto's search and settings buttons sit in its right end
-            BottomBar(now, bat, charging, wx, city, Modifier.fillMaxWidth().height(64.dp))
-            Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Column(Modifier.weight(0.46f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    MediaCard(Modifier.fillMaxWidth().weight(if (navigating) 1f else 1.25f))
-                    if (navigating) TurnCard(Modifier.fillMaxWidth().weight(1f))
-                    else Shortcuts(actions, Modifier.fillMaxWidth().weight(1f))
-                }
-                Column(Modifier.weight(0.54f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(Modifier.fillMaxWidth().weight(1.25f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        SpeedCard(Modifier.weight(1f).fillMaxHeight())
-                        CompassCard(Modifier.weight(1f).fillMaxHeight())
-                    }
-                    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        // a tap shows the routes driven today / this week on a map
-                        TodayCard(Modifier.weight(1f).fillMaxHeight().carTap("km-hoje") { RouteView.show = "hoje" })
-                        WeekCard(Modifier.weight(1f).fillMaxHeight().carTap("km-semana") { RouteView.show = "semana" })
-                    }
-                }
-            }
-        }
-    }
+    // Normal: flat on the black of the car's screen, with the blue of the 3D cluster
+    NormalAdapted(now, bat, charging, wx, city, actions, navigating, padL, padT, padR, padB)
 }
 
-/** Estrada stays as it is even when adapted to the car (thin text over the bright sky didn't read, the black edges looked odd). */
+/** Estrada. */
 @Composable
 private fun RoadDashLook(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: String, padL: Dp, padT: Dp, padR: Dp, padB: Dp) =
     RoadDash(now, bat, charging, wx, city, padL, padT, padR, padB)

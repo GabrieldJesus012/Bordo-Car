@@ -253,33 +253,6 @@ class MainActivity : ComponentActivity() {
                 Text("A prévia aparece no painel aqui em cima e na tela do carro, se estiver conectado.", color = Sub, fontSize = 12.sp)
             }
 
-            Section("Tema do painel") {
-                com.bordocar.ui.CarLook.load(this@MainActivity)
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()
-                    .clickable { com.bordocar.ui.CarLook.set(this@MainActivity, !com.bordocar.ui.CarLook.on); scope.launch { scroll.animateScrollTo(0) } }) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Adaptar ao carro", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Fundo preto puro, igual à faixa do Android Auto, sem caixas, ícones finos e sem a temperatura (o carro já mostra). Vale para os 4 modos; o Esportivo fica preto com um brilho vermelho.",
-                            color = Sub, fontSize = 12.sp)
-                    }
-                    androidx.compose.material3.Switch(com.bordocar.ui.CarLook.on, { com.bordocar.ui.CarLook.set(this@MainActivity, it) })
-                }
-                com.bordocar.ui.Themes.load(this@MainActivity)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    for (th in com.bordocar.ui.Themes.all) {
-                        val on = com.bordocar.ui.Themes.cur.key == th.key
-                        Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(androidx.compose.ui.graphics.Brush.linearGradient(th.bg))
-                            .border(if (on) 2.dp else 1.dp, if (on) th.accent.last() else Edge, RoundedCornerShape(12.dp))
-                            .clickable { com.bordocar.ui.Themes.set(this@MainActivity, th) }.padding(vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Box(Modifier.size(22.dp).clip(RoundedCornerShape(11.dp)).background(androidx.compose.ui.graphics.Brush.linearGradient(
-                                if (th.key == "capa") listOf(Color(0xFFFF5A4E), Color(0xFFFFC24E), Color(0xFF2FCB8E), Color(0xFF3D8BFF), Color(0xFFB45CFF)) else th.accent)))
-                            Text(th.name.substringBefore(' '), color = Color.White, fontSize = 12.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.padding(top = 6.dp))
-                        }
-                    }
-                }
-                Text("Capa: as cores acompanham a capa da música que está tocando. Também dá para trocar no carro, em Ajustes (a engrenagem).", color = Sub, fontSize = 12.sp)
-            }
-
             Section("Permissões") {
                 val loc = has(Manifest.permission.ACCESS_FINE_LOCATION)
                 val notif = Build.VERSION.SDK_INT < 33 || has(Manifest.permission.POST_NOTIFICATIONS)

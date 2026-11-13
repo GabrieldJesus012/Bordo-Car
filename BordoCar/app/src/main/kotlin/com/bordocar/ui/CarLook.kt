@@ -72,11 +72,9 @@ import java.util.Locale
  * Esportivo and Música stay as they are. Off by default.
  */
 object CarLook {
-    var on by mutableStateOf(false)
-        private set
-    private var loaded = false
-    fun load(ctx: Context) { if (loaded) return; loaded = true; on = Prefs(ctx).b("adapt", false) }
-    fun set(ctx: Context, v: Boolean) { on = v; Prefs(ctx).put("adapt", v) }
+    /** It's the dashboard's only look now (the option "Adaptar ao carro" became the default). */
+    val on: Boolean get() = true
+    fun load(ctx: Context) { }
 
     /** The background: pure black, the same as Android Auto's strip and the screen's frame (a grey never matched the car's). */
     val Graphite = Color.Black
