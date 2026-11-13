@@ -152,12 +152,8 @@ fun SportDash(now: Long, bat: Int, charging: Boolean, wx: Weather.Now?, city: St
     val jDist = jinfo?.takeIf { it.held }?.let { "${Math.round(it.aheadM / 10.0) * 10} m" } ?: tDist
 
     val adapt = CarLook.on
-    Box((if (adapt) Modifier.fillMaxSize().background(Color(0xFF1D1415)).drawBehind {
-            // (adapted to the car) the fine diagonal lines of the car's graphite, tinted red, a red glow in the middle, and the bottom
-            // melting into Android Auto's black strip
-            val step = 4.6.dp.toPx(); val lw = 1.6.dp.toPx()
-            var x = -size.height
-            while (x < size.width) { drawLine(Color(0xFF2C1C1D), Offset(x, size.height), Offset(x + size.height, 0f), strokeWidth = lw); x += step }
+    Box((if (adapt) Modifier.fillMaxSize().background(Color.Black).drawBehind {
+            // (adapted to the car) pure black like Android Auto's strip, with a soft red glow in the middle
             drawRect(Brush.radialGradient(listOf(Color(0x40FF3B30), Color.Transparent), center = Offset(size.width / 2f, size.height * 0.52f), radius = size.width * 0.42f))
             val f = padB.toPx() + 34.dp.toPx()
             drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black), startY = size.height - f, endY = size.height), Offset(0f, size.height - f), Size(size.width, f))

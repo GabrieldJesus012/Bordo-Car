@@ -78,7 +78,8 @@ object CarLook {
     fun load(ctx: Context) { if (loaded) return; loaded = true; on = Prefs(ctx).b("adapt", false) }
     fun set(ctx: Context, v: Boolean) { on = v; Prefs(ctx).put("adapt", v) }
 
-    val Graphite = Color(0xFF1C1D20)
+    /** The background: pure black, the same as Android Auto's strip and the screen's frame (a grey never matched the car's). */
+    val Graphite = Color.Black
     val Line = Color(0xFF26272B)
     val Hair = Color(0x1AFFFFFF)
     val Txt = Color(0xFFF4F4F6)
@@ -88,18 +89,10 @@ object CarLook {
 
 private val BR = Locale("pt", "BR")
 
-/** The graphite of the car's side bars: dark grey with fine diagonal lines. */
+/** The background of the adapted look: pure black, so the dashboard melts into the screen's frame and Android Auto's strip. */
 @Composable
 fun GraphiteBg(modifier: Modifier) {
-    Canvas(modifier) {
-        drawRect(CarLook.Graphite)
-        val step = 4.6.dp.toPx(); val w = 1.6.dp.toPx()
-        var x = -size.height
-        while (x < size.width) {
-            drawLine(CarLook.Line, Offset(x, size.height), Offset(x + size.height, 0f), strokeWidth = w)
-            x += step
-        }
-    }
+    Box(modifier.background(CarLook.Graphite))
 }
 
 /** The same type everywhere in the adapted look: a plain sans (the car's screens use one). */

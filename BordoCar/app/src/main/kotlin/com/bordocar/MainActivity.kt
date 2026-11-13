@@ -258,7 +258,7 @@ class MainActivity : ComponentActivity() {
                     .clickable { com.bordocar.ui.CarLook.set(this@MainActivity, !com.bordocar.ui.CarLook.on); scope.launch { scroll.animateScrollTo(0) } }) {
                     Column(Modifier.weight(1f)) {
                         Text("Adaptar ao carro", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Normal e Estrada com o fundo grafite da tela do 208, sem caixas, ícones finos e sem a temperatura (o carro já mostra). Esportivo e Música ficam como estão.",
+                        Text("Fundo preto puro, igual à faixa do Android Auto, sem caixas, ícones finos e sem a temperatura (o carro já mostra). Vale para os 4 modos; o Esportivo fica preto com um brilho vermelho.",
                             color = Sub, fontSize = 12.sp)
                     }
                     androidx.compose.material3.Switch(com.bordocar.ui.CarLook.on, { com.bordocar.ui.CarLook.set(this@MainActivity, it) })

@@ -296,7 +296,7 @@ class SettingsScreen(carContext: CarContext) : Screen(carContext) {
         list.addItem(Row.Builder().setTitle("Tema do painel").addText(com.bordocar.ui.Themes.cur.name + " · toque para trocar")
             .setOnClickListener { com.bordocar.ui.Themes.next(carContext); invalidate() }.build())
         com.bordocar.ui.CarLook.load(carContext)
-        list.addItem(Row.Builder().setTitle("Adaptar ao carro").addText("Normal e Estrada no grafite da tela, sem caixas")
+        list.addItem(Row.Builder().setTitle("Adaptar ao carro").addText("Fundo preto, sem caixas e sem a temperatura")
             .setToggle(androidx.car.app.model.Toggle.Builder { on ->
                 com.bordocar.ui.CarLook.set(carContext, on); invalidate()
             }.setChecked(com.bordocar.ui.CarLook.on).build()).build())
